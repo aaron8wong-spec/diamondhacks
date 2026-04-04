@@ -16,14 +16,9 @@ export default function DashboardPage() {
             Manage your imported class schedule
           </p>
         </div>
-        <div className="flex gap-3">
-          <Link href="/canvas">
-            <Button>Import from Canvas</Button>
-          </Link>
-          <Link href="/calendar">
-            <Button variant="secondary">Export to Calendar</Button>
-          </Link>
-        </div>
+        <Link href="/calendar">
+          <Button variant="secondary">Export to Calendar</Button>
+        </Link>
       </div>
       <ClassList />
     </div>

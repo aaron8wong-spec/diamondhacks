@@ -2,6 +2,7 @@
 
 import { useClasses } from "@/hooks/useClasses";
 import { ClassCard } from "./ClassCard";
+import { EmptyState } from "./EmptyState";
 
 export function ClassList() {
   const { classes, loading, error, toggleClass, deleteClass } = useClasses();
@@ -28,16 +29,7 @@ export function ClassList() {
   }
 
   if (classes.length === 0) {
-    return (
-      <div className="rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 p-12 text-center">
-        <p className="text-gray-500 dark:text-gray-400 text-lg">
-          No classes found
-        </p>
-        <p className="text-gray-400 dark:text-gray-500 mt-1">
-          Connect your Canvas account to import your class schedule
-        </p>
-      </div>
-    );
+    return <EmptyState />;
   }
 
   const enabledCount = classes.filter((c) => c.enabled).length;
