@@ -3,15 +3,16 @@
 import { type ButtonHTMLAttributes } from "react";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "danger" | "ghost";
+  variant?: "primary" | "light" | "secondary" | "danger" | "ghost";
   size?: "sm" | "md" | "lg";
 }
 
 const variants = {
-  primary: "bg-blue-600 hover:bg-blue-700 text-white",
-  secondary: "bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200",
-  danger: "bg-red-600 hover:bg-red-700 text-white",
-  ghost: "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300",
+  primary:   "bg-sky-400 hover:bg-sky-500 text-white shadow-sm shadow-sky-200/50",
+  light:     "bg-sky-50 hover:bg-sky-100 text-sky-600 border border-sky-100",
+  secondary: "bg-white/70 hover:bg-white text-slate-600 border border-sky-100 backdrop-blur-sm",
+  danger:    "bg-red-400 hover:bg-red-500 text-white",
+  ghost:     "hover:bg-sky-50 text-sky-600",
 };
 
 const sizes = {
@@ -30,7 +31,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-xl font-medium transition-all focus:outline-none focus:ring-2 focus:ring-sky-300 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
       disabled={disabled}
       {...props}
     >

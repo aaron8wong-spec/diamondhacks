@@ -1,10 +1,116 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { useClasses } from "@/hooks/useClasses";
+import { useToast } from "@/components/ui/Toast";
 import { ClassCard } from "./ClassCard";
+import { WeekView } from "./WeekView";
+import { Button } from "@/components/ui/Button";
+
+type FilterTab = "all" | "enabled" | "disabled";
+type ViewMode = "list" | "week";
+
+function detectConflicts(classes: ReturnType<typeof useClasses>["classes"]): Set<string> {
+  // Returns set of classIds that have a time conflict with another class
+  const conflictIds = new Set<string>();
+
+  interface Slot {
+    classId: string;
+    day: number;
+    start: number;
+    end: number;
+  }
+
+  function parseTime(t: string): number {
+    const m = t.trim().match(/^(\d+):(\d+)\s*(am|pm)?$/i);
+    if (!m) return 0;
+    let h = parseInt(m[1]);
+    const min = parseInt(m[2]);
+    const p = m[3]?.toLowerCase();
+    if (p === "pm" && h !== 12) h += 12;
+    if (p === "am" && h === 12) h = 0;
+    return h * 60 + min;
+  }
+
+  const slots: Slot[] = [];
+  classes.forEach((cls) => {
+    if (!cls.enabled) return;
+    cls.schedule.forEach((s) => {
+      slots.push({
+        classId: cls.id,
+        day: s.dayOfWeek,
+        start: parseTime(s.startTime),
+        end: parseTime(s.endTime),
+      });
+    });
+  });
+
+  for (let i = 0; i < slots.length; i++) {
+    for (let j = i + 1; j < slots.length; j++) {
+      const a = slots[i];
+      const b = slots[j];
+      if (a.classId !== b.classId && a.day === b.day && a.start < b.end && b.start < a.end) {
+        conflictIds.add(a.classId);
+        conflictIds.add(b.classId);
+      }
+    }
+  }
+
+  return conflictIds;
+}
 
 export function ClassList() {
-  const { classes, loading, error, toggleClass, deleteClass } = useClasses();
+  const { classes, loading, error, toggleClass, deleteClass, enableAll, disableAll } =
+    useClasses();
+  const showToast = useToast();
+
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FilterTab>("all");
+  const [view, setView] = useState<ViewMode>("list");
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const conflictIds = useMemo(() => detectConflicts(classes), [classes]);
+
+  const filtered = useMemo(() => {
+    return classes.filter((cls) => {
+      const matchesSearch =
+        search === "" ||
+        cls.code.toLowerCase().includes(search.toLowerCase()) ||
+        cls.name.toLowerCase().includes(search.toLowerCase()) ||
+        (cls.instructor?.toLowerCase().includes(search.toLowerCase()) ?? false);
+
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "enabled" && cls.enabled) ||
+        (filter === "disabled" && !cls.enabled);
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [classes, search, filter]);
+
+  const handleEnableAll = async () => {
+    setBulkLoading(true);
+    try {
+      await enableAll();
+      showToast("All classes enabled for export", "success");
+    } catch {
+      showToast("Failed to enable all classes", "error");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleDisableAll = async () => {
+    setBulkLoading(true);
+    try {
+      await disableAll();
+      showToast("All classes disabled", "info");
+    } catch {
+      showToast("Failed to disable all classes", "error");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -30,9 +136,7 @@ export function ClassList() {
   if (classes.length === 0) {
     return (
       <div className="rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 p-12 text-center">
-        <p className="text-gray-500 dark:text-gray-400 text-lg">
-          No classes found
-        </p>
+        <p className="text-gray-500 dark:text-gray-400 text-lg">No classes found</p>
         <p className="text-gray-400 dark:text-gray-500 mt-1">
           Connect your Canvas account to import your class schedule
         </p>
@@ -41,24 +145,125 @@ export function ClassList() {
   }
 
   const enabledCount = classes.filter((c) => c.enabled).length;
+  const conflictCount = conflictIds.size;
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
+    <div className="space-y-4">
+      {/* Stats + conflict warning */}
+      <div className="flex flex-wrap items-center gap-4">
         <p className="text-sm text-gray-500 dark:text-gray-400">
           {enabledCount} of {classes.length} classes enabled for calendar export
         </p>
+        {conflictCount > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded-full">
+            ⚠ {conflictCount} class{conflictCount !== 1 ? "es" : ""} with time conflicts
+          </span>
+        )}
       </div>
-      <div className="space-y-4">
-        {classes.map((cls) => (
-          <ClassCard
-            key={cls.id}
-            classInfo={cls}
-            onToggle={toggleClass}
-            onDelete={deleteClass}
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[200px]">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">
+            ⌕
+          </span>
+          <input
+            type="text"
+            placeholder="Search classes..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-        ))}
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-sm">
+          {(["all", "enabled", "disabled"] as FilterTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setFilter(tab)}
+              className={`px-3 py-1.5 font-medium capitalize transition-colors
+                ${
+                  filter === tab
+                    ? "bg-blue-600 text-white"
+                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {/* View toggle */}
+        <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-sm">
+          <button
+            onClick={() => setView("list")}
+            className={`px-3 py-1.5 font-medium transition-colors
+              ${
+                view === "list"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+              }`}
+          >
+            List
+          </button>
+          <button
+            onClick={() => setView("week")}
+            className={`px-3 py-1.5 font-medium transition-colors
+              ${
+                view === "week"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+              }`}
+          >
+            Week
+          </button>
+        </div>
+
+        {/* Bulk actions */}
+        <div className="flex gap-2 ml-auto">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleEnableAll}
+            disabled={bulkLoading || enabledCount === classes.length}
+          >
+            Enable All
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleDisableAll}
+            disabled={bulkLoading || enabledCount === 0}
+          >
+            Disable All
+          </Button>
+        </div>
       </div>
+
+      {/* Content */}
+      {view === "week" ? (
+        <WeekView classes={filtered} />
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center">
+          <p className="text-gray-400 dark:text-gray-500 text-sm">
+            No classes match your search
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map((cls) => (
+            <ClassCard
+              key={cls.id}
+              classInfo={cls}
+              onToggle={toggleClass}
+              onDelete={deleteClass}
+              hasConflict={conflictIds.has(cls.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

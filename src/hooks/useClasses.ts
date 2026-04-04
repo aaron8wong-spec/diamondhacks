@@ -75,5 +75,15 @@ export function useClasses() {
     setClasses((prev) => prev.filter((c) => c.id !== classId));
   };
 
-  return { classes, loading, error, fetchClasses, toggleClass, deleteClass };
+  const enableAll = async () => {
+    const toEnable = classes.filter((c) => !c.enabled);
+    await Promise.all(toEnable.map((c) => toggleClass(c.id)));
+  };
+
+  const disableAll = async () => {
+    const toDisable = classes.filter((c) => c.enabled);
+    await Promise.all(toDisable.map((c) => toggleClass(c.id)));
+  };
+
+  return { classes, loading, error, fetchClasses, toggleClass, deleteClass, enableAll, disableAll };
 }

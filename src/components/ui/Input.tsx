@@ -11,12 +11,12 @@ export function Input({ label, error, className = "", ...props }: InputProps) {
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label className="block text-sm font-medium text-slate-600">
           {label}
         </label>
       )}
       <input
-        className={`w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${error ? "border-red-500" : ""} ${className}`}
+        className={`w-full rounded-xl border border-sky-100 bg-white/70 backdrop-blur-sm px-3 py-2 text-sm text-slate-700 placeholder-sky-300 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200 ${error ? "border-red-300" : ""} ${className}`}
         {...props}
       />
       {error && <p className="text-sm text-red-500">{error}</p>}
