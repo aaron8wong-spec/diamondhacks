@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Project overview
 
-CanvasCal is a Next.js 16 App Router application that uses Browser Use (AI browser automation) to scrape Canvas LMS class schedules and push them to Google Calendar. It has a swappable data layer (JSON files for dev, MongoDB for production) and hand-rolled JWT authentication.
+CanvasCal is a Next.js 16 App Router application that uses Browser Use (AI browser automation) to scrape Canvas LMS class schedules and push them to Google Calendar. It has a swappable data layer (JSON files for dev, MongoDB for production), hand-rolled JWT authentication, and a growing set of productivity extensions (todos, focus timer, travel reminders, study materials, lecture AI).
 
 ## Repository map
 
@@ -20,10 +20,23 @@ src/
 │   ├── api/classes/[classId]/route.ts                  # GET/PATCH/DELETE single class
 │   ├── api/classes/[classId]/toggle/route.ts           # PATCH toggle enabled
 │   ├── api/canvas/{connect,status,profile}/route.ts    # Browser Use Canvas integration
-│   ├── api/calendar/{connect,export}/route.ts          # Browser Use Google Calendar
-│   ├── dashboard/{layout,page}.tsx                     # Main authenticated view
+│   ├── api/calendar/{connect,export,callback,calendars,events}/route.ts  # Calendar (BU + OAuth2)
+│   ├── api/todos/route.ts                              # GET/POST todos
+│   ├── api/todos/[todoId]/route.ts                     # PATCH/DELETE todo
+│   ├── api/todos/sync/route.ts                         # Sync todos from Canvas
+│   ├── api/reminders/route.ts                          # GET/POST reminders
+│   ├── api/reminders/[reminderId]/route.ts             # PATCH/DELETE reminder
+│   ├── api/reminders/[reminderId]/send/route.ts        # Send reminder
+│   ├── api/lectures/route.ts                           # GET/POST lectures
+│   ├── api/lectures/[lectureId]/route.ts               # GET/DELETE lecture
+│   ├── api/lectures/[lectureId]/process/route.ts       # Process lecture video
+│   ├── api/study/[classId]/route.ts                    # GET/POST study materials
+│   ├── api/travel/route.ts                             # GET/POST travel estimates
+│   ├── dashboard/{layout,page}.tsx                     # Main dashboard with Today/Classes tabs
 │   ├── canvas/page.tsx                                 # Canvas import wizard
 │   ├── calendar/page.tsx                               # Calendar export page
+│   ├── schedule/{layout,page}.tsx                      # Full calendar schedule view
+│   ├── focus/page.tsx                                  # Fullscreen focus timer
 │   ├── login/page.tsx                                  # Login form
 │   ├── register/page.tsx                               # Registration form
 │   ├── layout.tsx                                      # Root layout with AuthProvider
@@ -40,22 +53,63 @@ src/
 │   ├── auth/
 │   │   ├── password.ts           # hashPassword(), verifyPassword() using bcrypt
 │   │   ├── jwt.ts                # signToken(), verifyToken() using jsonwebtoken
-│   │   └── middleware.ts         # withAuth() — wraps route handlers with auth check
+│   │   └── middleware.ts         # withAuth() — wraps route handlers, passes (req, user, { params })
 │   ├── browser-use/
 │   │   ├── client.ts             # getClient() — BrowserUse SDK v3 singleton
 │   │   ├── canvas-scraper.ts     # Canvas import + external crawl lifecycle (7 exports)
 │   │   ├── calendar-pusher.ts    # startGoogleCalendarSession(), exportToGoogleCalendar()
-│   │   └── schemas.ts           # Zod schemas for scrape output parsing
-│   └── extensions/types.ts       # Unimplemented interfaces: ITodoProvider, ITravelTimeProvider, IReminderProvider, IStudyMaterialProvider, ILectureProvider
+│   │   └── schemas.ts            # Zod schemas for scrape output parsing + dayStringToNumber()
+│   ├── google/
+│   │   └── calendar.ts           # OAuth2-based Google Calendar API (create events, list calendars)
+│   ├── extensions/
+│   │   ├── types.ts              # ITodoProvider, ITravelTimeProvider, IReminderProvider, IStudyMaterialProvider, ILectureProvider
+│   │   ├── todo-provider.ts      # Canvas assignment sync via Browser Use
+│   │   ├── travel-provider.ts    # Travel time estimates
+│   │   ├── reminder-provider.ts  # Reminder scheduling
+│   │   ├── lecture-provider.ts   # Lecture video analysis via Anthropic API
+│   │   └── study-provider.ts     # Study material generation via Anthropic API
+│   └── quarter-dates.ts          # UCSD quarter date utilities
 ├── components/
-│   ├── ui/{Button,Input,Card,Toggle}.tsx               # Reusable UI primitives
-│   ├── auth/{LoginForm,RegisterForm}.tsx                # Auth form components
-│   ├── dashboard/{ClassCard,ClassList,CrawlExternalUrl}.tsx  # Class display + external crawl
-│   ├── canvas/{BrowserFrame,ConnectionWizard}.tsx       # Canvas import UI
-│   └── calendar/CalendarExport.tsx                      # Calendar export UI
+│   ├── ui/{Button,Input,Card,Toggle,Toast,ConfirmDialog}.tsx  # Reusable UI primitives
+│   ├── auth/{LoginForm,RegisterForm}.tsx                       # Auth form components
+│   ├── dashboard/
+│   │   ├── ClassCard.tsx          # Single class card with toggle, delete, conflict indicator
+│   │   ├── ClassList.tsx          # Class list with search, filter, week view, conflict detection
+│   │   ├── CrawlExternalUrl.tsx   # External URL crawl from dashboard
+│   │   ├── WeekView.tsx           # Weekly schedule grid view
+│   │   ├── EmptyState.tsx         # Rich onboarding state when no classes imported
+│   │   └── TodayCard.tsx          # Today's schedule card with next class, leave reminder
+│   ├── canvas/{BrowserFrame,ConnectionWizard}.tsx  # Canvas import UI
+│   ├── calendar/CalendarExport.tsx                 # Calendar export UI
+│   ├── calendar-view/
+│   │   ├── CalendarLayout.tsx     # Main calendar wrapper (converts classes → events)
+│   │   ├── Calendar{Month,Week,Day}View.tsx  # Three calendar view modes
+│   │   ├── CalendarTopBar.tsx     # Navigation, view switcher, add event button
+│   │   ├── CalendarSidebar.tsx    # Mini calendar, upcoming events, type filters
+│   │   ├── CalendarEventCard.tsx  # Single event display
+│   │   ├── MiniCalendar.tsx       # Small month calendar for sidebar
+│   │   ├── TimeSelectionModal.tsx # Add custom events (study blocks, reminders, etc.)
+│   │   ├── UpcomingEventsList.tsx # Sidebar upcoming events list
+│   │   └── types.ts              # CalendarEvent, EventType, CalendarView types
+│   ├── productivity/
+│   │   ├── SmartDayView.tsx       # Today tab — shows today's classes or next class day preview
+│   │   ├── RightNowPanel.tsx      # "Right now" status — current/next class, free time suggestions
+│   │   ├── DailyTimeline.tsx      # Visual timeline of today's schedule with gaps
+│   │   ├── LeaveReminder.tsx      # Travel time countdown to next class
+│   │   ├── FocusTimer.tsx         # Pomodoro-style focus timer (inline or fullscreen)
+│   │   ├── TinyTasks.tsx          # Quick local task list
+│   │   └── types.ts              # ClassEvent type, getTodaysEvents(), getNextClassDay()
+│   └── extensions/
+│       ├── TodoPanel.tsx          # Canvas assignment todos UI
+│       ├── ReminderSetup.tsx      # Reminder configuration UI
+│       ├── TravelWarnings.tsx     # Travel time warnings UI
+│       ├── LecturePanel.tsx       # Lecture video analysis UI
+│       ├── StudyPanel.tsx         # Study material generation UI
+│       └── index.ts              # Extension component exports
 ├── hooks/
-│   ├── useClasses.ts             # Fetch + mutate class list
-│   └── useBrowserSession.ts      # Manage Browser Use session lifecycle
+│   ├── useClasses.ts             # Fetch + mutate class list (toggle, delete, enableAll, disableAll)
+│   ├── useBrowserSession.ts      # Manage Browser Use session lifecycle
+│   └── useGoogleCalendarEvents.ts # Fetch Google Calendar events via OAuth2
 ├── context/AuthContext.tsx         # Auth state provider + useAuth() hook
 └── middleware.ts                   # Route protection redirects
 ```
@@ -102,9 +156,19 @@ Bypasses Canvas entirely — creates a fresh BU session and goes straight to the
 - Must STOP if it encounters a login page and return what it has so far
 
 ### Calendar export flow
-1. `POST /api/calendar/connect` → similar profile + session setup for Google
+Two paths depending on configuration:
+
+**Path A — Google OAuth2** (when `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` are set):
+1. `POST /api/calendar/connect` → returns Google OAuth2 authorization URL
+2. User authorizes → callback at `/api/calendar/callback` saves refresh token
+3. `POST /api/calendar/export` → creates recurring events via Google Calendar API directly
+4. `GET /api/calendar/calendars` → lists user's calendars
+5. `GET /api/calendar/events` → fetches existing events
+
+**Path B — Browser Use** (fallback):
+1. `POST /api/calendar/connect` → creates Browser Use session for Google
 2. User logs into Google through iframe
-3. `POST /api/calendar/export` → fetches enabled classes → AI agent creates recurring calendar events
+3. `POST /api/calendar/export` → AI agent creates events via browser automation
 
 ## Key patterns
 
@@ -116,6 +180,15 @@ import { repo } from "@/lib/db";
 export const GET = withAuth(async (_req, user) => {
   const data = await repo.findClassesByUserId(user.id);
   return Response.json({ data });
+});
+```
+
+### Protected API route with dynamic params
+```typescript
+export const GET = withAuth(async (_req, user, { params }) => {
+  const { classId } = await params;
+  const cls = await repo.findClassById(classId);
+  // ...
 });
 ```
 
@@ -141,7 +214,7 @@ console.log(result.output); // string output from the agent
 await client.sessions.stop(session.id);
 ```
 
-**SDK notes**: Import from `browser-use-sdk/v3` (not the default export which is v2). Pinned to 3.4.0 (3.4.1 ships without dist). Model tiers: `bu-mini`, `bu-max`, `bu-ultra`.
+**SDK notes**: Import from `browser-use-sdk/v3` (not the default export which is v2). Pinned to 3.4.0 (3.4.1 ships without dist). Model tiers: `bu-mini`, `bu-max`, `bu-ultra` — do NOT use Anthropic/OpenAI model IDs.
 
 ### Adding to the data layer
 1. Define interface in `src/lib/db/types.ts`
@@ -155,6 +228,10 @@ await client.sessions.stop(session.id);
 - `DEV_MODE=mongo` — MongoDB via Mongoose, requires `MONGODB_URI`
 - `BROWSER_USE_API_KEY` — Required for Canvas/Calendar browser automation
 - `JWT_SECRET` — Required for auth token signing
+- `NEXT_PUBLIC_APP_URL` — App URL (default `http://localhost:3000`)
+- `ANTHROPIC_API_KEY` — Used by lecture and study material providers
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Optional: enables OAuth2 Google Calendar (falls back to Browser Use)
+- `GOOGLE_MAPS_API_KEY` — Optional: travel time estimates
 
 ## Known limitations
 
@@ -163,15 +240,16 @@ await client.sessions.stop(session.id);
 - Zod v4: import as `import { z } from "zod/v4"`.
 - Browser Use sessions timeout after 15 minutes of inactivity (4 hours max).
 - JSON dev mode has no file locking — avoid concurrent writes in testing.
+- Extension providers (`todo-provider`, `study-provider`, `lecture-provider`, `reminder-provider`, `travel-provider`) use in-memory storage — data does not persist across restarts in dev mode.
 
-## Extension points
+## Extension features
 
-These interfaces exist in `src/lib/extensions/types.ts` but are not yet implemented:
+These interfaces are defined in `src/lib/extensions/types.ts` and have implementations + API routes + UI components:
 
-| Interface | Purpose | Would integrate with |
-|-----------|---------|---------------------|
-| `ITodoProvider` | Class-specific todo tracking | Canvas Assignments API or scraping |
-| `ITravelTimeProvider` | Travel time between locations | Google Maps API |
-| `IReminderProvider` | Email/SMS/push reminders | Twilio, SendGrid, or web push |
-| `IStudyMaterialProvider` | Textbook + flashcard generation | Browser Use + LLM |
-| `ILectureProvider` | Video analysis + flashcards | TwelveLabs API |
+| Feature | Provider | API Routes | UI Component |
+|---------|----------|------------|--------------|
+| Todos | `todo-provider.ts` | `/api/todos`, `/api/todos/[todoId]`, `/api/todos/sync` | `TodoPanel.tsx` |
+| Travel time | `travel-provider.ts` | `/api/travel` | `TravelWarnings.tsx` |
+| Reminders | `reminder-provider.ts` | `/api/reminders`, `/api/reminders/[reminderId]`, `/api/reminders/[reminderId]/send` | `ReminderSetup.tsx` |
+| Study materials | `study-provider.ts` | `/api/study/[classId]` | `StudyPanel.tsx` |
+| Lecture AI | `lecture-provider.ts` | `/api/lectures`, `/api/lectures/[lectureId]`, `/api/lectures/[lectureId]/process` | `LecturePanel.tsx` |
