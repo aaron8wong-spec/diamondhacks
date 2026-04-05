@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 const NAV_ITEMS = [
   { label: "Today",    href: "/dashboard" },
@@ -30,7 +31,7 @@ export default function DashboardLayout({
   if (loading || !user) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="h-8 w-8 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+        <div className="h-8 w-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
       </div>
     );
   }
@@ -38,22 +39,22 @@ export default function DashboardLayout({
   const initial = user.username.charAt(0).toUpperCase();
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-gradient-to-b from-[#E9ECF4] via-[#F2F3F9] to-[#F7F8FC] dark:from-gray-900 dark:via-gray-950 dark:to-gray-950">
+    <div className="flex-1 flex flex-col min-h-screen bg-[#F5F6F8] dark:bg-[#0F1117]">
 
       {/* ── Header ── */}
-      <header className="sticky top-0 z-10 border-b border-gray-200/80 bg-white/90 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/90">
+      <header className="sticky top-0 z-10 border-b border-[#EBEBEB] dark:border-[#1E2235] bg-white/95 dark:bg-[#1A1D27]/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
 
           {/* Logo + nav */}
-          <div className="flex items-center gap-7">
+          <div className="flex items-center gap-6">
             <Link
               href="/dashboard"
-              className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"
+              className="flex items-center gap-2 text-sm font-bold text-[#000000] dark:text-[#F5F6F8] tracking-tight"
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#163847] text-xs font-bold text-white">
-                C
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-500 text-[11px] font-bold text-white leading-none">
+                i
               </span>
-              CanvasCal
+              inBtwn
             </Link>
 
             <nav className="flex items-center gap-0.5">
@@ -68,8 +69,8 @@ export default function DashboardLayout({
                     href={href}
                     className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                       active
-                        ? "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white"
-                        : "text-gray-500 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+                        ? "bg-[#F0F1F5] text-[#000000] dark:bg-[#22263A] dark:text-[#F5F6F8]"
+                        : "text-[#8F8F8F] hover:bg-[#F5F6F8] hover:text-[#464646] dark:hover:bg-[#22263A] dark:hover:text-[#C8C8C8]"
                     }`}
                   >
                     {label}
@@ -80,8 +81,10 @@ export default function DashboardLayout({
           </div>
 
           {/* User controls */}
-          <div className="flex items-center gap-3">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-300">
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <div className="w-px h-4 bg-[#D3D3D3] dark:bg-[#2E3347]" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
               {initial}
             </div>
             <Button
@@ -91,7 +94,7 @@ export default function DashboardLayout({
                 await logout();
                 window.location.href = "/login";
               }}
-              className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              className="text-[#8F8F8F] hover:text-[#464646] dark:text-[#8F8F8F] dark:hover:text-[#C8C8C8]"
             >
               Sign out
             </Button>
