@@ -205,38 +205,111 @@ export default function SettingsPage() {
 
 // ── Email Settings sub-component ──────────────────────────────────
 
+interface ClassScheduleEntry {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  location?: string;
+  type: string;
+}
+
+interface ClassItem {
+  id: string;
+  code: string;
+  name: string;
+  schedule: ClassScheduleEntry[];
+}
+
+interface TodoItem {
+  id: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  classId: string;
+}
+
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 function EmailSettings() {
   const [email, setEmail] = useState("");
-  const [sending, setSending] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ type: string; message: string } | null>(null);
 
-  const sendTest = async (type: "leave" | "todo") => {
-    if (!email.trim()) {
-      setResult({ type: "error", message: "Enter your email address first." });
-      return;
-    }
-    setSending(type);
+  // Data for pickers
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState("");
+  const [selectedSlotIdx, setSelectedSlotIdx] = useState("0");
+  const [selectedTodoId, setSelectedTodoId] = useState("");
+
+  // Load classes + todos on mount
+  useState(() => {
+    fetch("/api/classes").then((r) => r.json()).then((d) => {
+      setClasses(d.classes ?? []);
+      if (d.classes?.length) setSelectedClassId(d.classes[0].id);
+    }).catch(() => {});
+    fetch("/api/todos").then((r) => r.json()).then((d) => {
+      const active = (d.todos ?? []).filter((t: TodoItem & { completed: boolean }) => !t.completed);
+      setTodos(active);
+      if (active.length) setSelectedTodoId(active[0].id);
+    }).catch(() => {});
+  });
+
+  const selectedClass = classes.find((c) => c.id === selectedClassId);
+  const selectedSlot = selectedClass?.schedule[parseInt(selectedSlotIdx)] ?? null;
+  const selectedTodo = todos.find((t) => t.id === selectedTodoId);
+
+  const sendLeave = async () => {
+    if (!email.trim()) { setResult({ type: "error", message: "Enter your email address." }); return; }
+    if (!selectedClass || !selectedSlot) { setResult({ type: "error", message: "Select a class." }); return; }
+    setSending(true);
     setResult(null);
     try {
-      const body = type === "leave"
-        ? { type: "leave", to: email, test: false, classCode: "CSE 125", className: "Software Systems", location: "WLH 2001", startTime: "2:00 PM", walkingMinutes: 10, leaveBy: "1:50 PM" }
-        : { type: "todo", to: email, test: false, todoTitle: "Complete Problem Set 3", dueDate: "Tomorrow", classCode: "CSE 127", description: "Due by 11:59 PM" };
+      const [h, m] = selectedSlot.startTime.split(":").map(Number);
+      const d = new Date(); d.setHours(h, m);
+      const startLabel = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
       const res = await fetch("/api/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          type: "leave", to: email,
+          classCode: selectedClass.code,
+          className: selectedClass.name,
+          location: selectedSlot.location ?? "TBD",
+          startTime: startLabel,
+          walkingMinutes: 10,
+          leaveBy: `${h}:${String(Math.max(0, m - 10)).padStart(2, "0")}`,
+        }),
       });
       const data = await res.json();
-      setResult({
-        type: data.success ? "success" : "error",
-        message: data.message || data.error || "Unknown result",
+      setResult({ type: data.success ? "success" : "error", message: data.message || data.error });
+    } catch { setResult({ type: "error", message: "Failed to send." }); }
+    finally { setSending(false); }
+  };
+
+  const sendTodo = async () => {
+    if (!email.trim()) { setResult({ type: "error", message: "Enter your email address." }); return; }
+    if (!selectedTodo) { setResult({ type: "error", message: "Select a todo." }); return; }
+    setSending(true);
+    setResult(null);
+    try {
+      const cls = classes.find((c) => c.id === selectedTodo.classId);
+      const res = await fetch("/api/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "todo", to: email,
+          todoTitle: selectedTodo.title,
+          description: selectedTodo.description,
+          dueDate: selectedTodo.dueDate ?? "No due date",
+          classCode: cls?.code,
+        }),
       });
-    } catch {
-      setResult({ type: "error", message: "Failed to send email" });
-    } finally {
-      setSending(null);
-    }
+      const data = await res.json();
+      setResult({ type: data.success ? "success" : "error", message: data.message || data.error });
+    } catch { setResult({ type: "error", message: "Failed to send." }); }
+    finally { setSending(false); }
   };
 
   return (
@@ -244,14 +317,12 @@ function EmailSettings() {
       <div>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Email Reminders</h2>
         <p className="text-sm text-gray-500 mt-0.5">
-          Get reminded to leave for class or complete a task. Requires SMTP configuration in environment variables (disabled by default).
+          Send yourself a reminder to leave for class or complete a task.
         </p>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Your email address
-        </label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your email</label>
         <input
           type="email"
           value={email}
@@ -261,22 +332,65 @@ function EmailSettings() {
         />
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Button
-          size="sm"
-          onClick={() => sendTest("leave")}
-          disabled={sending !== null}
-        >
-          {sending === "leave" ? "Sending..." : "Test: Leave for class"}
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => sendTest("todo")}
-          disabled={sending !== null}
-        >
-          {sending === "todo" ? "Sending..." : "Test: Todo reminder"}
-        </Button>
+      {/* Leave for class */}
+      <div className="border-t border-gray-100 dark:border-gray-700 pt-4 space-y-2">
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Leave for class</p>
+        <div className="flex flex-wrap gap-2 items-end">
+          <div>
+            <label className="block text-xs text-gray-500 mb-0.5">Class</label>
+            <select
+              value={selectedClassId}
+              onChange={(e) => { setSelectedClassId(e.target.value); setSelectedSlotIdx("0"); }}
+              className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm"
+            >
+              {classes.map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}
+            </select>
+          </div>
+          {selectedClass && selectedClass.schedule.length > 0 && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">Session</label>
+              <select
+                value={selectedSlotIdx}
+                onChange={(e) => setSelectedSlotIdx(e.target.value)}
+                className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm"
+              >
+                {selectedClass.schedule.map((s, i) => (
+                  <option key={i} value={i}>
+                    {DAY_LABELS[s.dayOfWeek]} {s.startTime} {s.type}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <Button size="sm" onClick={sendLeave} disabled={sending}>
+            {sending ? "Sending..." : "Send"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Todo reminder */}
+      <div className="border-t border-gray-100 dark:border-gray-700 pt-4 space-y-2">
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Todo reminder</p>
+        <div className="flex flex-wrap gap-2 items-end">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs text-gray-500 mb-0.5">Task</label>
+            <select
+              value={selectedTodoId}
+              onChange={(e) => setSelectedTodoId(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm"
+            >
+              {todos.length === 0 && <option value="">No active todos</option>}
+              {todos.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}{t.dueDate ? ` (due ${t.dueDate})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button size="sm" variant="secondary" onClick={sendTodo} disabled={sending || todos.length === 0}>
+            {sending ? "Sending..." : "Send"}
+          </Button>
+        </div>
       </div>
 
       {result && (
@@ -286,7 +400,7 @@ function EmailSettings() {
       )}
 
       <p className="text-xs text-gray-400">
-        Configure SMTP via environment variables: SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_ENABLED=true
+        SMTP config: SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_ENABLED=true
       </p>
     </Card>
   );
