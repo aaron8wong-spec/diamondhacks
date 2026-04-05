@@ -10,8 +10,6 @@ import { Button } from "@/components/ui/Button";
 const NAV_ITEMS = [
   { label: "Today",    href: "/dashboard" },
   { label: "Schedule", href: "/dashboard/schedule" },
-  { label: "Canvas",   href: "/canvas"    },
-  { label: "Calendar", href: "/calendar"  },
   { label: "Focus",    href: "/focus"     },
   { label: "Settings", href: "/dashboard/settings" },
 ];

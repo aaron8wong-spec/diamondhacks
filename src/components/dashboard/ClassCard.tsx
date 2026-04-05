@@ -2,22 +2,16 @@
 
 import { useState } from "react";
 import { TodoPanel } from "@/components/extensions/TodoPanel";
-import { ReminderSetup } from "@/components/extensions/ReminderSetup";
-import { StudyPanel } from "@/components/extensions/StudyPanel";
-import { LecturePanel } from "@/components/extensions/LecturePanel";
 import { AssignmentPanel } from "@/components/extensions/AssignmentPanel";
 import type { ClassInfo } from "@/hooks/useClasses";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const TABS = ["Assignments", "Todos", "Reminders", "Study", "Lectures"] as const;
+const TABS = ["Assignments", "Todos"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_COLORS: Record<Tab, string> = {
   Assignments: "#FFB020",
   Todos:       "#5B6CFF",
-  Reminders:   "#FF5C5C",
-  Study:       "#45D483",
-  Lectures:    "#9C8CFF",
 };
 
 interface ClassCardProps {
@@ -218,15 +212,6 @@ export function ClassCard({ classInfo, onToggle, onDelete }: ClassCardProps) {
             )}
             {activeTab === "Todos" && (
               <TodoPanel classId={classInfo.id} className={classInfo.code} canvasUrl="https://canvas.ucsd.edu" />
-            )}
-            {activeTab === "Reminders" && (
-              <ReminderSetup classId={classInfo.id} className={classInfo.code} />
-            )}
-            {activeTab === "Study" && (
-              <StudyPanel classId={classInfo.id} className={classInfo.code} />
-            )}
-            {activeTab === "Lectures" && (
-              <LecturePanel classId={classInfo.id} className={classInfo.code} />
             )}
           </div>
         </div>

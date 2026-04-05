@@ -290,6 +290,8 @@ function AssignmentDetail({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [editingMilestone, setEditingMilestone] = useState<string | null>(null);
+  const [showContextInput, setShowContextInput] = useState(false);
+  const [extraContext, setExtraContext] = useState("");
 
   const colors = TYPE_COLORS[assignment.type] ?? FALLBACK_COLOR;
   const days = daysUntil(assignment.dueDate);
@@ -300,6 +302,8 @@ function AssignmentDetail({
     try {
       const res = await fetch(`/api/assignments/${assignment.id}/generate-milestones`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ extraContext: extraContext.trim() || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -430,19 +434,45 @@ function AssignmentDetail({
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {assignment.milestones.length === 0 ? (
-          <button onClick={generateMilestones} disabled={generating} style={btnStyle("#5B6CFF", generating)}>
-            {generating ? "Generating milestones…" : "✨ Generate milestones with AI"}
-          </button>
-        ) : (
-          <button onClick={generateMilestones} disabled={generating} style={btnStyle("#9C8CFF", generating)}>
-            {generating ? "Regenerating…" : "↻ Regenerate milestones"}
-          </button>
+      <div style={{ marginBottom: 16 }}>
+        {showContextInput && (
+          <div style={{ marginBottom: 8 }}>
+            <textarea
+              value={extraContext}
+              onChange={(e) => setExtraContext(e.target.value)}
+              placeholder="Paste the assignment description, rubric, or any details here for more accurate milestones..."
+              rows={4}
+              style={{
+                width: "100%", padding: "8px 10px", fontSize: 12, borderRadius: 8,
+                border: "1px solid #d1d5e8", resize: "vertical", fontFamily: "inherit",
+                background: "#fafbff", color: "#1f1f2e",
+              }}
+            />
+            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              <button onClick={generateMilestones} disabled={generating} style={btnStyle("#5B6CFF", generating)}>
+                {generating ? "Generating…" : "Generate with context"}
+              </button>
+              <button
+                onClick={() => { setShowContextInput(false); setExtraContext(""); }}
+                style={{ ...btnStyle("#6A6A80"), background: "transparent", color: "#6A6A80" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
-        <button onClick={exportCalendar} disabled={exporting} style={btnStyle("#45D483", exporting)}>
-          {exporting ? "Exporting…" : assignment.calendarExported ? "📅 Re-export to Calendar" : "📅 Export to Calendar"}
-        </button>
+        {!showContextInput && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => setShowContextInput(true)} disabled={generating} style={btnStyle("#5B6CFF", generating)}>
+              {assignment.milestones.length === 0
+                ? "✨ Generate milestones with AI"
+                : "↻ Regenerate milestones"}
+            </button>
+            <button onClick={exportCalendar} disabled={exporting} style={btnStyle("#45D483", exporting)}>
+              {exporting ? "Exporting…" : assignment.calendarExported ? "📅 Re-export to Calendar" : "📅 Export to Calendar"}
+            </button>
+          </div>
+        )}
       </div>
 
       {error && <ErrorBanner msg={error} />}

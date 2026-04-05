@@ -9,7 +9,7 @@ import { parseLocationToBuilding, getWalkingMinutes } from "@/lib/travel/walking
 import { RightNowPanel } from "./RightNowPanel";
 import { LeaveReminder } from "./LeaveReminder";
 import { DailyTimeline } from "./DailyTimeline";
-import { TinyTasks } from "./TinyTasks";
+import { TodoList } from "@/components/dashboard/TodoList";
 import { FocusTimer } from "./FocusTimer";
 import Link from "next/link";
 
@@ -89,7 +89,7 @@ export function SmartDayView() {
           </Link>
         </div>
         <div className="flex flex-col gap-4">
-          <TinyTasks />
+          <TodoList />
           <FocusTimer />
         </div>
       </div>
@@ -122,7 +122,7 @@ export function SmartDayView() {
 
         {/* Sidebar — tasks + timer */}
         <div className="flex flex-col gap-4">
-          <TinyTasks />
+          <TodoList />
           <FocusTimer />
         </div>
       </div>

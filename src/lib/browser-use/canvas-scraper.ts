@@ -76,10 +76,11 @@ const SCRAPE_PROMPT = (canvasUrl: string) => `You are on Canvas LMS at ${canvasU
    - Course name and course code (e.g. "CSE 110", "COGS 13" — the short department + number code, NOT the full name)
    - Instructor name, term/semester
    - Full schedule: days of week, start/end times, locations
-   - Check the Syllabus page for schedule details, office hours, and any links
+   - Check the Syllabus page for schedule details, office hours, links, AND any listed assignments/deadlines/exams with due dates
    - Check the Assignments page and extract ALL assignments with their titles, due dates, point values, and types
    - Check the Modules page for any external links or resources
    - Check the Home page for any additional info
+   - Look for assignment info EVERYWHERE: syllabus text, course calendar, announcements, and module descriptions. Many instructors list deadlines only on the syllabus, not on the Assignments page.
 3. Find the quarter/term start and end dates:
    - Check the Canvas calendar, academic calendar link, syllabus, or any "Important Dates" section
    - Extract the first day of instruction and last day of instruction for the current term
@@ -98,13 +99,10 @@ const SCRAPE_PROMPT = (canvasUrl: string) => `You are on Canvas LMS at ${canvasU
    - Do NOT try to construct a URL with query parameters — always use the form UI.
    - Extract lecture, discussion, and lab section times, locations, and instructors from the results.
    - If you can't find the course after a couple of attempts, move on and return what you have.
-5. Follow ALL external links you find (up to 2 clicks deep) to gather more info
-   - Some classes host content on Piazza, Ed Discussion, Gradescope, personal websites, etc.
+5. If you find a link to a dedicated course website (e.g. an instructor's course homepage), click into it to extract schedule and assignment info.
+   - ONLY follow links that are clearly a course website or course homepage. Do NOT follow links to Piazza, Ed Discussion, Gradescope, Google Drive, Google Docs, Zoom, or any other tool.
    - CRITICAL: You MUST actually CLICK links/buttons on the page rather than navigating to URLs directly.
-     Canvas uses SSO passthrough — clicking a Piazza/Gradescope/Ed link FROM a Canvas page will
-     automatically authenticate you. Navigating to the URL directly will NOT work and will show a login page.
-     Always click the link element on the page, never use direct URL navigation for external tools.
-   - Extract any schedule, office hours, or meeting info from these sites
+   - If you hit a login wall, give up immediately and move on.
 6. OVER-DOCUMENT: capture everything you find, even if it seems minor
 
 SCHEDULE ENTRY RULES — pay close attention to the "type" and "dayOfWeek" fields:
@@ -128,11 +126,12 @@ const DEEPER_PROMPT = (canvasUrl: string) => `You previously scraped Canvas at $
 
 1. Go back to the Courses page and check ALL courses again — including past terms if visible
 2. For each course, check EVERY tab: Home, Syllabus, Modules, Assignments, Grades, People, Files
-3. Click into external tool links FROM WITHIN Canvas (Piazza, Gradescope, Ed Discussion, etc.)
-   - CRITICAL: You MUST actually CLICK the link/button elements on the Canvas page — do NOT navigate
-     to external URLs directly. Canvas SSO passthrough only works when you click from within Canvas.
-     Direct URL navigation will hit a login wall.
-   - Extract any additional schedule, section, or instructor info from these external tools
+3. Click into external links FROM WITHIN Canvas to instructor/course websites
+   - DO NOT visit Piazza, Ed Discussion, Gradescope, or Google Drive — these require separate login and will waste time.
+   - Google Docs/Sheets are OK to try, but give up immediately if you hit a login wall.
+   - Good targets: instructor personal websites, course homepages, department pages.
+   - CRITICAL: You MUST actually CLICK the link/button elements on the Canvas page — do NOT navigate to URLs directly.
+   - Extract any additional schedule, section, instructor, or assignment info from these sites
 4. Look for meeting patterns in assignment due dates and discussion sections
 5. Check the Canvas calendar view for any scheduled events
 6. Look at announcement pages for schedule changes or room updates
@@ -173,9 +172,17 @@ Extract ALL information you can find about courses/classes on this site:
 - Instructors
 - Schedules: days, times, locations
 - Syllabus content, office hours (include who is hosting each OH session)
+- ALL assignments, homework, projects, essays, quizzes, exams, and deadlines with due dates and point values
+  Look for these in: assignment lists, syllabus pages, course calendars, gradebook, announcements
+  On Gradescope: check the assignments list for due dates
+  On Piazza/Ed: check for pinned posts with deadlines
+  On instructor websites: check syllabus, schedule, and homework pages
 - Any links to other resources
-- Assignment info, section info
 - ANYTHING that looks like it relates to a class
+
+Also follow links within this site (up to 2 clicks deep) to find additional assignment and schedule info.
+DO NOT follow links to Piazza, Gradescope, or Google Drive — these require separate login.
+Google Docs/Sheets links are OK to try, but give up immediately if you hit a login wall.
 
 If the site requires login, STOP and return what the page shows — the user will log in manually.
 
@@ -378,10 +385,11 @@ async function runScrapeTask(
     : mode === "external"
       ? EXTERNAL_URL_PROMPT(url)
       : SCRAPE_PROMPT(url);
+  const timeout = mode === "deeper" ? 2_400_000 : 1_200_000; // 40 min for deeper, 20 min otherwise
   const run = client.run(prompt, {
     sessionId: buSessionId,
     model: "bu-mini",
-    timeout: 1_200_000,
+    timeout,
   });
 
   // Stream steps for live progress

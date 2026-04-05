@@ -3,6 +3,7 @@ import { repo } from "@/lib/db";
 import { getClient } from "@/lib/browser-use/client";
 import { readCollection, writeCollection } from "@/lib/db/json/store";
 import { callAI } from "@/lib/ai/openrouter";
+import { todoProvider } from "./todo-provider";
 import type { IAssignment, IMilestone, IAssignmentProvider } from "./assignment-types";
 
 const COLLECTION = "assignments";
@@ -95,10 +96,22 @@ export const assignmentProvider: IAssignmentProvider = {
     );
     const updated = { ...assignment, milestones, updatedAt: now() };
     upsert(updated);
+
+    // Sync completion to matching todo
+    if (updates.completed !== undefined) {
+      const allTodos = await todoProvider.getAllTodos(assignment.userId);
+      const matchingTodo = allTodos.find(
+        (t) => t.canvasAssignmentId === `milestone-${milestoneId}`
+      );
+      if (matchingTodo) {
+        await todoProvider.updateTodo(matchingTodo.id, { completed: updates.completed });
+      }
+    }
+
     return updated;
   },
 
-  async generateMilestones(assignmentId) {
+  async generateMilestones(assignmentId, extraContext) {
     const assignment = findById(assignmentId);
     if (!assignment) throw new Error("Assignment not found");
 
@@ -122,6 +135,7 @@ Type: ${assignment.type}
 Due: ${new Date(assignment.dueDate).toLocaleDateString()}
 Days until due: ${daysUntilDue}
 ${assignment.description ? `Description: ${assignment.description}` : ""}
+${extraContext ? `\nAdditional details from the student:\n${extraContext.slice(0, 4000)}` : ""}
 
 Generate exactly ${count} milestones that will help the student complete this assignment step by step.
 Each milestone should be a concrete, actionable task that builds toward the final submission.
@@ -158,6 +172,33 @@ Example format:
 
     const updated = { ...assignment, milestones, updatedAt: now() };
     upsert(updated);
+
+    // Create a todo for each milestone
+    for (const m of milestones) {
+      await todoProvider.createTodo({
+        userId: assignment.userId,
+        classId: assignment.classId,
+        title: `${cls?.code ?? ""}: ${m.title}`,
+        description: `${assignment.title} — ${m.description}`,
+        dueDate: m.dueDate,
+        completed: false,
+        source: "canvas",
+        canvasAssignmentId: `milestone-${m.id}`,
+      });
+    }
+
+    // Also create a todo for the assignment due date itself
+    await todoProvider.createTodo({
+      userId: assignment.userId,
+      classId: assignment.classId,
+      title: `${cls?.code ?? ""}: ${assignment.title} DUE`,
+      description: `Assignment due`,
+      dueDate: assignment.dueDate,
+      completed: false,
+      source: "canvas",
+      canvasAssignmentId: `due-${assignment.id}`,
+    });
+
     return updated;
   },
 

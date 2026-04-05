@@ -4,7 +4,7 @@ import { useState } from "react";
 import { MiniCalendar } from "./MiniCalendar";
 import { UpcomingEventsList } from "./UpcomingEventsList";
 import { FocusTimer } from "@/components/productivity/FocusTimer";
-import { TinyTasks } from "@/components/productivity/TinyTasks";
+import { TodoList } from "@/components/dashboard/TodoList";
 import { EVENT_STYLE } from "./types";
 import type { CalendarEvent, EventType, CalendarView } from "./types";
 import { ALL_RESIDENCES, ALL_BUILDINGS, locationLabel } from "@/lib/travel/walking-times";
@@ -222,10 +222,23 @@ export function CalendarSidebar({
           </button>
           {openSection === "tasks" && (
             <div className="px-3 pb-3">
-              <TinyTasks />
+              <TodoList />
             </div>
           )}
         </div>
+      </div>
+
+      {/* Export to Google */}
+      <div className="border-t border-gray-200/60 px-3 py-3">
+        <a
+          href="/calendar"
+          className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+          Export to Google Calendar
+        </a>
       </div>
     </aside>
   );

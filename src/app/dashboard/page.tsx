@@ -85,11 +85,18 @@ export default function DashboardPage() {
             })}
           </p>
         </div>
-        <Link href="/calendar">
-          <button className="inline-flex items-center justify-center rounded-xl bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 text-sm font-medium transition-all">
-            Export to Calendar
-          </button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/canvas">
+            <button className="inline-flex items-center justify-center rounded-xl bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 text-sm font-medium transition-all">
+              Import from Canvas
+            </button>
+          </Link>
+          <Link href="/calendar">
+            <button className="inline-flex items-center justify-center rounded-xl bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 text-sm font-medium transition-all">
+              Export to Google
+            </button>
+          </Link>
+        </div>
       </div>
 
       {/* ── External crawl utility ───────────────────────────────────────────── */}

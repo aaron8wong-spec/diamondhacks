@@ -37,7 +37,7 @@ export interface IAssignmentProvider {
   updateAssignment(id: string, updates: Partial<IAssignment>): Promise<IAssignment | null>;
   deleteAssignment(id: string): Promise<boolean>;
   updateMilestone(assignmentId: string, milestoneId: string, updates: Partial<IMilestone>): Promise<IAssignment | null>;
-  generateMilestones(assignmentId: string): Promise<IAssignment>;
+  generateMilestones(assignmentId: string, extraContext?: string): Promise<IAssignment>;
   syncFromCanvas(userId: string, classId: string, canvasUrl: string): Promise<IAssignment[]>;
   exportToCalendar(assignmentId: string, userId: string): Promise<boolean>;
 }
