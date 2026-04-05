@@ -361,12 +361,28 @@ function CompactTimer({ onExpand }: { onExpand?: () => void }) {
 interface FocusTimerProps {
   fullscreen?: boolean;
   onClose?: () => void;
+  /** Controlled open state — pass alongside onExpandChange for external trigger */
+  expanded?: boolean;
+  onExpandChange?: (v: boolean) => void;
 }
 
-export function FocusTimer({ fullscreen = false, onClose }: FocusTimerProps) {
-  const [expanded, setExpanded] = useState(false);
+export function FocusTimer({
+  fullscreen = false,
+  onClose,
+  expanded: expandedProp,
+  onExpandChange,
+}: FocusTimerProps) {
+  const [expandedInternal, setExpandedInternal] = useState(false);
 
-  if (fullscreen || expanded) {
+  const isControlled = expandedProp !== undefined;
+  const isExpanded   = isControlled ? expandedProp : expandedInternal;
+
+  const setExpanded = (v: boolean) => {
+    if (!isControlled) setExpandedInternal(v);
+    onExpandChange?.(v);
+  };
+
+  if (fullscreen || isExpanded) {
     return <FullTimer onClose={onClose ?? (() => setExpanded(false))} />;
   }
 
