@@ -1,23 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Poppins } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const poppins = Poppins({
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-poppins",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "CanvasCal - Class Schedule to Calendar",
-  description: "Import your Canvas class schedule to Google Calendar automatically",
+  title: "inBtwn - Your Class Schedule Companion",
+  description: "Import your Canvas class schedule, find free time, and export to Google Calendar.",
 };
 
 export default function RootLayout({
@@ -28,10 +24,24 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={poppins.variable + " h-full antialiased"}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-gradient-to-br from-sky-50 via-white to-cyan-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 dark:text-gray-100">
+      {/* No-flash script: apply .dark before first paint */}
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var s = localStorage.getItem('inbtwn-theme');
+                var pref = s || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                if (pref === 'dark') document.documentElement.classList.add('dark');
+              } catch(e) {}
+            `,
+          }}
+        />
+      </head>
+      <body className="min-h-full flex flex-col bg-[#F5F6F8] dark:bg-[#0F1117]">
         <ThemeProvider>
           <AuthProvider>
             <ToastProvider>{children}</ToastProvider>

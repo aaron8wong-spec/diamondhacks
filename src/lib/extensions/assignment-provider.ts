@@ -3,6 +3,7 @@ import { repo } from "@/lib/db";
 import { getClient } from "@/lib/browser-use/client";
 import { readCollection, writeCollection } from "@/lib/db/json/store";
 import { callAI } from "@/lib/ai/openrouter";
+import { todoProvider } from "./todo-provider";
 import type { IAssignment, IMilestone, IAssignmentProvider } from "./assignment-types";
 
 const COLLECTION = "assignments";
@@ -53,13 +54,13 @@ export const assignmentProvider: IAssignmentProvider = {
   async getAssignmentsForClass(userId, classId) {
     return loadAll()
       .filter((a) => a.userId === userId && a.classId === classId)
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+      .sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"));
   },
 
   async getAllAssignments(userId) {
     return loadAll()
       .filter((a) => a.userId === userId)
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+      .sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"));
   },
 
   async createAssignment(data) {
@@ -95,19 +96,31 @@ export const assignmentProvider: IAssignmentProvider = {
     );
     const updated = { ...assignment, milestones, updatedAt: now() };
     upsert(updated);
+
+    // Sync completion to matching todo
+    if (updates.completed !== undefined) {
+      const allTodos = await todoProvider.getAllTodos(assignment.userId);
+      const matchingTodo = allTodos.find(
+        (t) => t.canvasAssignmentId === `milestone-${milestoneId}`
+      );
+      if (matchingTodo) {
+        await todoProvider.updateTodo(matchingTodo.id, { completed: updates.completed });
+      }
+    }
+
     return updated;
   },
 
-  async generateMilestones(assignmentId) {
+  async generateMilestones(assignmentId, extraContext) {
     const assignment = findById(assignmentId);
     if (!assignment) throw new Error("Assignment not found");
 
     const cls = await repo.findClassById(assignment.classId);
     const courseName = cls ? `${cls.code} — ${cls.name}` : "Unknown course";
 
-    const daysUntilDue = Math.ceil(
-      (new Date(assignment.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-    );
+    const daysUntilDue = assignment.dueDate
+      ? Math.ceil((new Date(assignment.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      : 14;
 
     const count =
       assignment.type === "project" ? 5 :
@@ -119,9 +132,10 @@ export const assignmentProvider: IAssignmentProvider = {
 Course: ${courseName}
 Assignment: ${assignment.title}
 Type: ${assignment.type}
-Due: ${new Date(assignment.dueDate).toLocaleDateString()}
+Due: ${assignment.dueDate ? new Date(assignment.dueDate).toLocaleDateString() : "No due date"}
 Days until due: ${daysUntilDue}
 ${assignment.description ? `Description: ${assignment.description}` : ""}
+${extraContext ? `\nAdditional details from the student:\n${extraContext.slice(0, 4000)}` : ""}
 
 Generate exactly ${count} milestones that will help the student complete this assignment step by step.
 Each milestone should be a concrete, actionable task that builds toward the final submission.
@@ -145,7 +159,8 @@ Example format:
       throw new Error("Failed to parse AI milestone response");
     }
 
-    const dates = spreadMilestoneDates(assignment.dueDate, rawMilestones.length);
+    const dueStr = assignment.dueDate ?? new Date(Date.now() + 14 * 86_400_000).toISOString().split("T")[0];
+    const dates = spreadMilestoneDates(dueStr, rawMilestones.length);
 
     const milestones: IMilestone[] = rawMilestones.map((m, i) => ({
       id: uuidv4(),
@@ -158,6 +173,33 @@ Example format:
 
     const updated = { ...assignment, milestones, updatedAt: now() };
     upsert(updated);
+
+    // Create a todo for each milestone
+    for (const m of milestones) {
+      await todoProvider.createTodo({
+        userId: assignment.userId,
+        classId: assignment.classId,
+        title: `${cls?.code ?? ""}: ${m.title}`,
+        description: `${assignment.title} — ${m.description}`,
+        dueDate: m.dueDate,
+        completed: false,
+        source: "canvas",
+        canvasAssignmentId: `milestone-${m.id}`,
+      });
+    }
+
+    // Also create a todo for the assignment due date itself
+    await todoProvider.createTodo({
+      userId: assignment.userId,
+      classId: assignment.classId,
+      title: `${cls?.code ?? ""}: ${assignment.title} DUE`,
+      description: `Assignment due`,
+      dueDate: assignment.dueDate,
+      completed: false,
+      source: "canvas",
+      canvasAssignmentId: `due-${assignment.id}`,
+    });
+
     return updated;
   },
 
@@ -211,25 +253,26 @@ Return ONLY a JSON array, no other text. If no assignments are found, return [].
     const allExisting = loadAll();
     const created: IAssignment[] = [];
     for (const a of scraped) {
+      const aId = a.id || "";
       const exists = allExisting.find(
         (ex) =>
           ex.userId === userId &&
           ex.classId === classId &&
-          (ex.canvasAssignmentId === a.id || ex.title === a.title)
+          ((aId && ex.canvasAssignmentId && ex.canvasAssignmentId === aId) || ex.title === a.title)
       );
       if (exists) continue;
-      if (!a.dueDate) continue;
+      if (!a.title) continue;
 
       const assignment = await assignmentProvider.createAssignment({
         userId,
         classId,
         title: a.title,
         description: a.description,
-        dueDate: a.dueDate,
+        dueDate: a.dueDate || undefined,
         points: a.points,
         type: a.type ?? "homework",
         source: "canvas",
-        canvasAssignmentId: a.id,
+        canvasAssignmentId: aId || undefined,
         completed: false,
       });
       created.push(assignment);

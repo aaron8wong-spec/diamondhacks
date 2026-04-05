@@ -11,7 +11,7 @@ import { useClasses } from "@/hooks/useClasses";
 import { useGoogleCalendarEvents } from "@/hooks/useGoogleCalendarEvents";
 import { useTravelPreferences } from "@/hooks/useTravelPreferences";
 import { generateTravelEvents } from "@/lib/travel/generate-travel-events";
-import { getQuarterDates, inferQuarterWeeks, getFirstDayInQuarter, getFinalExamDate } from "@/lib/quarter-dates";
+import { getQuarterDates, inferQuarterWeeks, getFirstDayInQuarter, getFinalExamDate, getMidtermDate } from "@/lib/quarter-dates";
 import type { CalendarView, EventType, CalendarEvent } from "./types";
 import type { NewCalendarEvent } from "./TimeSelectionModal";
 
@@ -53,7 +53,9 @@ function classesToCalendarEvents(
 
       // Finals/midterms: generate a SINGLE event on the correct date, not weekly
       if (slotType === "final" || slotType === "midterm") {
-        const examDate = getFinalExamDate(cls.term, slot.dayOfWeek);
+        const examDate = slotType === "midterm"
+          ? getMidtermDate(cls.term, slot.dayOfWeek)
+          : getFinalExamDate(cls.term, slot.dayOfWeek);
         if (examDate) {
           const date = new Date(examDate + "T00:00:00");
           const label = slotType === "final" ? "FINAL" : "MIDTERM";
@@ -185,7 +187,10 @@ export function CalendarLayout({ showGoogleEvents = true }: CalendarLayoutProps)
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<CalendarView>("week");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [hiddenTypes, setHiddenTypes] = useState<Set<EventType>>(new Set());
+  const [hiddenTypes, setHiddenTypes] = useState<Set<EventType>>(() => {
+    // Office hours hidden by default — user can toggle on in sidebar
+    return new Set<EventType>(["office_hours"]);
+  });
   const [showAddModal, setShowAddModal] = useState(false);
   const [userEvents, setUserEvents] = useState<CalendarEvent[]>([]);
 
@@ -238,8 +243,16 @@ export function CalendarLayout({ showGoogleEvents = true }: CalendarLayoutProps)
 
   const travelEvents = useMemo(() => {
     if (!travelPrefs.travelEventsEnabled) return [];
-    return generateTravelEvents(baseEvents, travelPrefs.homeBase, travelPrefs);
-  }, [baseEvents, travelPrefs]);
+    // Sync hidden types with travel prefs — if OH is hidden, disable OH travel too
+    const effectivePrefs = {
+      ...travelPrefs,
+      travelForOfficeHours: travelPrefs.travelForOfficeHours && !hiddenTypes.has("office_hours"),
+      travelForLectures: travelPrefs.travelForLectures && !hiddenTypes.has("lecture"),
+      travelForDiscussions: travelPrefs.travelForDiscussions && !hiddenTypes.has("discussion"),
+      travelForLabs: travelPrefs.travelForLabs && !hiddenTypes.has("lab"),
+    };
+    return generateTravelEvents(baseEvents, travelPrefs.homeBase, effectivePrefs);
+  }, [baseEvents, travelPrefs, hiddenTypes]);
 
   const allEvents = useMemo(
     () => [...baseEvents, ...travelEvents, ...userEvents],
@@ -290,6 +303,16 @@ export function CalendarLayout({ showGoogleEvents = true }: CalendarLayoutProps)
     setShowAddModal(false);
   };
 
+  // Types that have travel disabled — used to hide "Skip" button for those types
+  const noTravelTypes = useMemo(() => {
+    const s = new Set<string>();
+    if (!travelPrefs.travelForLectures) s.add("lecture");
+    if (!travelPrefs.travelForDiscussions) s.add("discussion");
+    if (!travelPrefs.travelForLabs) s.add("lab");
+    if (!travelPrefs.travelForOfficeHours) s.add("office_hours");
+    return s;
+  }, [travelPrefs]);
+
   const sharedProps = {
     currentDate,
     events: visibleEvents,
@@ -301,6 +324,7 @@ export function CalendarLayout({ showGoogleEvents = true }: CalendarLayoutProps)
     },
     skippedEventIds: travelPrefs.skippedEventIds,
     onToggleSkip: toggleSkippedEvent,
+    noTravelTypes,
   };
 
   return (
@@ -330,7 +354,7 @@ export function CalendarLayout({ showGoogleEvents = true }: CalendarLayoutProps)
           onAddLocationOverride={addLocationOverride}
           onRemoveLocationOverride={removeLocationOverride}
         />
-        <main className="flex-1 overflow-hidden bg-white">
+        <main className="flex-1 overflow-hidden bg-white dark:bg-[#0F1117]">
           {view === "month" && <CalendarMonthView {...sharedProps} />}
           {view === "week" && <CalendarWeekView {...sharedProps} />}
           {view === "day" && <CalendarDayView {...sharedProps} />}

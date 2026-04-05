@@ -59,6 +59,27 @@ export function getFirstDayInQuarter(quarterStart: string, dayOfWeek: number): s
 }
 
 /**
+ * Given a term and a day-of-week, return the ISO date of an estimated midterm.
+ * Places it during week 5 of the quarter (mid-quarter).
+ */
+export function getMidtermDate(term: string, dayOfWeek: number): string | null {
+  const known = getQuarterDates(term);
+  if (!known) return null;
+
+  // Week 5 starts 4 weeks after quarter start
+  const week5Monday = new Date(known.start + "T00:00:00");
+  const startDow = week5Monday.getDay();
+  // Advance to Monday of week 1, then +4 weeks
+  const toMonday = (1 - startDow + 7) % 7;
+  week5Monday.setDate(week5Monday.getDate() + toMonday + 4 * 7);
+
+  const diff = (dayOfWeek - 1 + 7) % 7;
+  const midtermDate = new Date(week5Monday);
+  midtermDate.setDate(week5Monday.getDate() + diff);
+  return midtermDate.toISOString().split("T")[0];
+}
+
+/**
  * Given a term and a day-of-week, return the ISO date of the final exam.
  * Finals week starts the Monday after instruction ends.
  * The final is on the same day-of-week during finals week.

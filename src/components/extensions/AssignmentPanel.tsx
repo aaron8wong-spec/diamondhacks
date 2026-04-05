@@ -23,11 +23,13 @@ const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
 };
 const FALLBACK_COLOR = { bg: "#f0f1f9", text: "#6A6A80" };
 
-function daysUntil(dateStr: string): number {
+function daysUntil(dateStr: string | undefined): number | null {
+  if (!dateStr) return null;
   return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
-function urgencyColor(days: number): string {
+function urgencyColor(days: number | null): string {
+  if (days === null) return "#6A6A80";
   if (days < 0) return "#6A6A80";
   if (days <= 2) return "#FF5C5C";
   if (days <= 5) return "#FFB020";
@@ -235,7 +237,7 @@ function AssignmentRow({
               fontSize: 10, fontWeight: 700,
               color: assignment.completed ? "var(--muted)" : urgencyColor(days),
             }}>
-              {assignment.completed ? "Done" : days < 0 ? "Overdue" : days === 0 ? "Today!" : `${days}d`}
+              {assignment.completed ? "Done" : days === null ? "No date" : days < 0 ? "Overdue" : days === 0 ? "Today!" : `${days}d`}
             </span>
             <span style={{
               fontSize: 9, fontWeight: 700,
@@ -290,6 +292,8 @@ function AssignmentDetail({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [editingMilestone, setEditingMilestone] = useState<string | null>(null);
+  const [showContextInput, setShowContextInput] = useState(false);
+  const [extraContext, setExtraContext] = useState("");
 
   const colors = TYPE_COLORS[assignment.type] ?? FALLBACK_COLOR;
   const days = daysUntil(assignment.dueDate);
@@ -300,6 +304,8 @@ function AssignmentDetail({
     try {
       const res = await fetch(`/api/assignments/${assignment.id}/generate-milestones`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ extraContext: extraContext.trim() || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -393,11 +399,15 @@ function AssignmentDetail({
               )}
             </div>
             <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
-              Due {new Date(assignment.dueDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-              {" · "}
-              <span style={{ color: urgencyColor(days), fontWeight: 600 }}>
-                {days < 0 ? "Overdue" : days === 0 ? "Due today!" : `${days} days left`}
-              </span>
+              {assignment.dueDate
+                ? <>Due {new Date(assignment.dueDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</>
+                : "No due date"}
+              {days !== null && <>
+                {" · "}
+                <span style={{ color: urgencyColor(days), fontWeight: 600 }}>
+                  {days < 0 ? "Overdue" : days === 0 ? "Due today!" : `${days} days left`}
+                </span>
+              </>}
               {assignment.points && ` · ${assignment.points} pts`}
             </p>
             {assignment.description && (
@@ -430,19 +440,45 @@ function AssignmentDetail({
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {assignment.milestones.length === 0 ? (
-          <button onClick={generateMilestones} disabled={generating} style={btnStyle("#5B6CFF", generating)}>
-            {generating ? "Generating milestones…" : "✨ Generate milestones with AI"}
-          </button>
-        ) : (
-          <button onClick={generateMilestones} disabled={generating} style={btnStyle("#9C8CFF", generating)}>
-            {generating ? "Regenerating…" : "↻ Regenerate milestones"}
-          </button>
+      <div style={{ marginBottom: 16 }}>
+        {showContextInput && (
+          <div style={{ marginBottom: 8 }}>
+            <textarea
+              value={extraContext}
+              onChange={(e) => setExtraContext(e.target.value)}
+              placeholder="Paste the assignment description, rubric, or any details here for more accurate milestones..."
+              rows={4}
+              style={{
+                width: "100%", padding: "8px 10px", fontSize: 12, borderRadius: 8,
+                border: "1px solid #d1d5e8", resize: "vertical", fontFamily: "inherit",
+                background: "#fafbff", color: "#1f1f2e",
+              }}
+            />
+            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              <button onClick={generateMilestones} disabled={generating} style={btnStyle("#5B6CFF", generating)}>
+                {generating ? "Generating…" : "Generate with context"}
+              </button>
+              <button
+                onClick={() => { setShowContextInput(false); setExtraContext(""); }}
+                style={{ ...btnStyle("#6A6A80"), background: "transparent", color: "#6A6A80" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
-        <button onClick={exportCalendar} disabled={exporting} style={btnStyle("#45D483", exporting)}>
-          {exporting ? "Exporting…" : assignment.calendarExported ? "📅 Re-export to Calendar" : "📅 Export to Calendar"}
-        </button>
+        {!showContextInput && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => setShowContextInput(true)} disabled={generating} style={btnStyle("#5B6CFF", generating)}>
+              {assignment.milestones.length === 0
+                ? "✨ Generate milestones with AI"
+                : "↻ Regenerate milestones"}
+            </button>
+            <button onClick={exportCalendar} disabled={exporting} style={btnStyle("#45D483", exporting)}>
+              {exporting ? "Exporting…" : assignment.calendarExported ? "📅 Re-export to Calendar" : "📅 Export to Calendar"}
+            </button>
+          </div>
+        )}
       </div>
 
       {error && <ErrorBanner msg={error} />}
@@ -494,7 +530,9 @@ function AssignmentDetail({
                   {assignment.title}
                 </p>
                 <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>
-                  {new Date(assignment.dueDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                  {assignment.dueDate
+                    ? new Date(assignment.dueDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
+                    : "No due date"}
                 </p>
               </div>
             </div>
@@ -590,6 +628,7 @@ function MilestoneRow({
                   flexShrink: 0,
                 }}>
                   {milestone.completed ? "Done" :
+                    days === null ? "" :
                     days < 0 ? "Overdue" :
                     days === 0 ? "Today" :
                     `${days}d`}

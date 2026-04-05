@@ -4,6 +4,7 @@
 // ============================================================
 import { withAuth } from "@/lib/auth/middleware";
 import { todoProvider } from "@/lib/extensions/todo-provider";
+import { assignmentProvider } from "@/lib/extensions/assignment-provider";
 
 export const PATCH = withAuth(async (req, _user, { params }) => {
   const { todoId } = await params;
@@ -13,6 +14,23 @@ export const PATCH = withAuth(async (req, _user, { params }) => {
   if (!updated) {
     return Response.json({ error: "Todo not found" }, { status: 404 });
   }
+
+  // Sync completion back to the linked milestone
+  if (body.completed !== undefined && updated.canvasAssignmentId?.startsWith("milestone-")) {
+    const milestoneId = updated.canvasAssignmentId.replace("milestone-", "");
+    // Find the assignment that owns this milestone
+    const allAssignments = await assignmentProvider.getAllAssignments(updated.userId);
+    for (const assignment of allAssignments) {
+      const milestone = assignment.milestones.find((m) => m.id === milestoneId);
+      if (milestone) {
+        await assignmentProvider.updateMilestone(assignment.id, milestoneId, {
+          completed: body.completed,
+        });
+        break;
+      }
+    }
+  }
+
   return Response.json({ todo: updated });
 });
 

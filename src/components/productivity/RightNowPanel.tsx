@@ -55,14 +55,14 @@ export function RightNowPanel({ events, hasClasses, nextDay, onStartFocus }: Rig
 
   if (allDone) {
     return (
-      <div className="rounded-2xl border border-sky-100/60 bg-gradient-to-br from-teal-50/60 to-white p-6">
-        <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-2">Right now</p>
-        <p className="text-2xl font-light text-sky-800">All done for today</p>
-        <p className="text-sm text-sky-400 mt-1">No more classes. Good work.</p>
+      <div className="bg-white dark:bg-[#1A1D27] border border-[#EBEBEB] dark:border-[#1E2235] rounded-xl p-5 shadow-sm">
+        <p className="text-xs font-semibold text-[#8F8F8F] uppercase tracking-widest mb-1">Right now</p>
+        <p className="text-xl font-light text-[#000000] dark:text-[#F5F6F8]">All done for today</p>
+        <p className="text-sm text-[#8F8F8F] mt-1">No more classes. Good work.</p>
         {onStartFocus && (
           <button
             onClick={onStartFocus}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-50 border border-sky-200 text-sky-600 text-sm font-medium hover:bg-sky-100 hover:shadow-sm active:scale-[0.98] transition-all"
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#F0F1F5] dark:bg-[#22263A] border border-[#E2E4EC] dark:border-[#2E3347] text-[#464646] dark:text-[#C8C8C8] text-sm font-medium hover:bg-[#E8E9EF] dark:hover:bg-[#2A2F45] active:scale-[0.98] transition-all"
           >
             <PlayIcon /> Wind down with a focus session
           </button>
@@ -81,21 +81,18 @@ export function RightNowPanel({ events, hasClasses, nextDay, onStartFocus }: Rig
       : null;
 
     return (
-      <div
-        className="rounded-2xl border border-sky-200/50 p-6"
-        style={{ background: "linear-gradient(135deg,rgba(224,242,254,0.7) 0%,rgba(255,255,255,0.7) 100%)", backdropFilter: "blur(12px)" }}
-      >
-        <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-2">Happening now</p>
-        <p className="text-2xl font-semibold text-sky-700">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-5">
+        <p className="text-xs font-semibold text-blue-500 uppercase tracking-widest mb-1">Happening now</p>
+        <p className="text-xl font-semibold text-[#000000] dark:text-[#F5F6F8]">
           {currentClass.code}
           {currentClass.type === "office_hours" ? " · OH" : ""}
         </p>
-        <p className="text-sm text-sky-500 mt-0.5">
+        <p className="text-sm text-[#464646] dark:text-[#C8C8C8] mt-0.5">
           {currentClass.type === "office_hours" && currentClass.host
             ? currentClass.host
             : currentClass.name}
         </p>
-        <p className="text-sm text-sky-400 mt-2">
+        <p className="text-sm text-[#8F8F8F] mt-2">
           Ends in {minsLeft} min{minsLeft !== 1 ? "s" : ""}
           {currentClass.location ? ` · ${currentClass.location}` : ""}
         </p>
@@ -103,7 +100,7 @@ export function RightNowPanel({ events, hasClasses, nextDay, onStartFocus }: Rig
         {gapAfter !== null && gapAfter >= 20 && onStartFocus && (
           <button
             onClick={onStartFocus}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-50 border border-sky-100 text-sky-600 text-sm font-medium hover:bg-sky-100 hover:shadow-sm active:scale-[0.98] transition-all"
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-300 text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-900/60 active:scale-[0.98] transition-all"
           >
             <PlayIcon /> {fmtMins(gapAfter)} free after — start a focus session
           </button>
@@ -118,23 +115,25 @@ export function RightNowPanel({ events, hasClasses, nextDay, onStartFocus }: Rig
     const first = nextDay.events[0];
     const startLabel = first.startTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     return (
-      <div className="rounded-2xl border border-sky-100/60 bg-gradient-to-br from-sky-50/40 to-white p-6">
-        <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-2">Right now</p>
-        <p className="text-2xl font-light text-sky-800">No classes today</p>
-        <p className="text-sm text-sky-400 mt-2">
-          Next up: <span className="font-semibold text-sky-500">{first.code}</span>{" "}
+      <div className="bg-white dark:bg-[#1A1D27] border border-[#EBEBEB] dark:border-[#1E2235] rounded-xl p-5 shadow-sm">
+        <p className="text-xs font-semibold text-[#8F8F8F] uppercase tracking-widest mb-1">Right now</p>
+        <p className="text-xl font-light text-[#000000] dark:text-[#F5F6F8]">No classes today</p>
+        <p className="text-sm text-[#464646] dark:text-[#C8C8C8] mt-2">
+          Next up:{" "}
+          <span className="font-semibold text-blue-500">{first.code}</span>{" "}
           {nextDay.dayName.toLowerCase() === "tomorrow" ? "tomorrow" : `on ${nextDay.dayName}`} at {startLabel}
           {first.location ? ` · ${first.location}` : ""}
         </p>
         {nextDay.events.length > 1 && (
-          <p className="text-xs text-sky-300 mt-1">
-            +{nextDay.events.length - 1} more class{nextDay.events.length - 1 !== 1 ? "es" : ""} that {nextDay.dayName.toLowerCase()}
+          <p className="text-xs text-[#8F8F8F] mt-1">
+            + {nextDay.events.length - 1} more class{nextDay.events.length - 1 !== 1 ? "es" : ""}{" "}
+            {nextDay.dayName.toLowerCase() === "today" ? "today" : nextDay.dayName.toLowerCase()}
           </p>
         )}
         {onStartFocus && (
           <button
             onClick={onStartFocus}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-50 border border-sky-200 text-sky-600 text-sm font-medium hover:bg-sky-100 hover:shadow-sm active:scale-[0.98] transition-all"
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#F0F1F5] dark:bg-[#22263A] border border-[#E2E4EC] dark:border-[#2E3347] text-[#464646] dark:text-[#C8C8C8] text-sm font-medium hover:bg-[#E8E9EF] dark:hover:bg-[#2A2F45] active:scale-[0.98] transition-all"
           >
             <PlayIcon /> Start a focus session
           </button>
@@ -147,10 +146,10 @@ export function RightNowPanel({ events, hasClasses, nextDay, onStartFocus }: Rig
 
   if (!nextClass || minsUntilNext === null) {
     return (
-      <div className="rounded-2xl border border-sky-100/60 bg-gradient-to-br from-sky-50/40 to-white p-6">
-        <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-2">Right now</p>
-        <p className="text-2xl font-light text-sky-800">No classes today</p>
-        <p className="text-sm text-sky-300 mt-1">Enjoy your free day.</p>
+      <div className="bg-white dark:bg-[#1A1D27] border border-[#EBEBEB] dark:border-[#1E2235] rounded-xl p-5 shadow-sm">
+        <p className="text-xs font-semibold text-[#8F8F8F] uppercase tracking-widest mb-1">Right now</p>
+        <p className="text-xl font-light text-[#000000] dark:text-[#F5F6F8]">No classes today</p>
+        <p className="text-sm text-[#8F8F8F] mt-1">Enjoy your free day.</p>
       </div>
     );
   }
@@ -164,45 +163,45 @@ export function RightNowPanel({ events, hasClasses, nextDay, onStartFocus }: Rig
   const focusDuration     = Math.min(Math.floor(minsUntilNext) - 5, 20);
 
   return (
-    <div className="rounded-2xl border border-sky-100/60 bg-gradient-to-br from-white to-sky-50/40 p-6">
-      <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-2">Right now</p>
+    <div className="bg-white dark:bg-[#1A1D27] border border-[#EBEBEB] dark:border-[#1E2235] rounded-xl p-5 shadow-sm">
+      <p className="text-xs font-semibold text-[#8F8F8F] uppercase tracking-widest mb-2">Right now</p>
 
-      <p className="text-2xl font-light text-sky-800 leading-snug">
+      <p className="text-xl font-light text-[#000000] dark:text-[#F5F6F8] leading-snug">
         {fmtMins(minsUntilNext)} until{" "}
-        <span className="font-semibold text-sky-600">{nextClass.code}</span>
+        <span className="font-semibold text-blue-500">{nextClass.code}</span>
       </p>
-      <p className="text-sm text-sky-400 mt-0.5">
+      <p className="text-sm text-[#8F8F8F] mt-0.5">
         {timeStr}{nextClass.location ? ` · ${nextClass.location}` : ""}
       </p>
 
-      <div className="mt-5">
+      <div className="mt-4">
         {hasEnoughForFocus ? (
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={onStartFocus}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-500 text-white text-sm font-semibold hover:bg-sky-600 hover:shadow-md active:scale-[0.98] transition-all"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600 hover:shadow-md active:scale-[0.98] transition-all"
             >
               <PlayIcon /> Start {focusDuration}-min focus
             </button>
-            <span className="text-xs text-sky-300">or knock out a task below</span>
+            <span className="text-xs text-[#8F8F8F]">or knock out a task below</span>
           </div>
         ) : hasShortWindow ? (
           <div>
-            <p className="text-xs font-medium text-sky-400 mb-2.5">Quick things you could do:</p>
+            <p className="text-xs font-medium text-[#8F8F8F] mb-2.5">Quick things you could do:</p>
             <div className="flex flex-wrap gap-2">
               {suggestions.map((task) => (
                 <span
                   key={task}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-100 text-xs text-sky-600"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F0F1F5] dark:bg-[#22263A] border border-[#E2E4EC] dark:border-[#2E3347] text-xs text-[#464646] dark:text-[#C8C8C8]"
                 >
-                  <span className="w-1 h-1 rounded-full bg-sky-300 shrink-0" />
+                  <span className="w-1 h-1 rounded-full bg-[#60CCD4] shrink-0" />
                   {task}
                 </span>
               ))}
             </div>
           </div>
         ) : (
-          <p className="text-sm text-sky-400">Head over soon — class starts at {timeStr}.</p>
+          <p className="text-sm text-[#8F8F8F]">Head over soon — class starts at {timeStr}.</p>
         )}
       </div>
     </div>
