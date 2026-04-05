@@ -12,14 +12,16 @@ interface Props {
   canvasUrl?: string;
 }
 
-const TYPE_COLORS: Record<IAssignment["type"], { bg: string; text: string }> = {
+const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
   homework: { bg: "#eaecff", text: "#5B6CFF" },
   project:  { bg: "#f2f0ff", text: "#9C8CFF" },
   exam:     { bg: "#fff0f0", text: "#FF5C5C" },
   quiz:     { bg: "#fffbee", text: "#FFB020" },
   lab:      { bg: "#edfbf3", text: "#45D483" },
+  essay:    { bg: "#fef3e2", text: "#D97706" },
   other:    { bg: "#f0f1f9", text: "#6A6A80" },
 };
+const FALLBACK_COLOR = { bg: "#f0f1f9", text: "#6A6A80" };
 
 function daysUntil(dateStr: string): number {
   return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -194,7 +196,7 @@ function AssignmentRow({
 }) {
   const [hovered, setHovered] = useState(false);
   const days = daysUntil(assignment.dueDate);
-  const colors = TYPE_COLORS[assignment.type];
+  const colors = TYPE_COLORS[assignment.type] ?? FALLBACK_COLOR;
 
   return (
     <div
@@ -289,7 +291,7 @@ function AssignmentDetail({
   const [success, setSuccess] = useState<string | null>(null);
   const [editingMilestone, setEditingMilestone] = useState<string | null>(null);
 
-  const colors = TYPE_COLORS[assignment.type];
+  const colors = TYPE_COLORS[assignment.type] ?? FALLBACK_COLOR;
   const days = daysUntil(assignment.dueDate);
 
   async function generateMilestones() {

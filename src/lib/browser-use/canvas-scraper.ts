@@ -3,6 +3,7 @@ import { dayStringToNumber } from "./schemas";
 import type { ScrapedCourse } from "./schemas";
 import { repo } from "@/lib/db";
 import type { IUser, ClassSchedule } from "@/lib/db/types";
+import { assignmentProvider } from "@/lib/extensions/assignment-provider";
 import { getQuarterDates } from "@/lib/quarter-dates";
 
 /**
@@ -76,6 +77,7 @@ const SCRAPE_PROMPT = (canvasUrl: string) => `You are on Canvas LMS at ${canvasU
    - Instructor name, term/semester
    - Full schedule: days of week, start/end times, locations
    - Check the Syllabus page for schedule details, office hours, and any links
+   - Check the Assignments page and extract ALL assignments with their titles, due dates, point values, and types
    - Check the Modules page for any external links or resources
    - Check the Home page for any additional info
 3. Find the quarter/term start and end dates:
@@ -118,7 +120,7 @@ SCHEDULE ENTRY RULES — pay close attention to the "type" and "dayOfWeek" field
 IMPORTANT: If you encounter a login page on ANY site (including Canvas SSO), STOP immediately and return what you have so far as JSON. Do NOT try to log in yourself — the user will handle that.
 
 CRITICAL: Your FINAL response must be ONLY the JSON object below — no other text, no file saving, no workspace operations. Just output the raw JSON directly as your response:
-{ "courses": [{ "canvasId": "74024", "name": "Field Methods: Cognition in the Wild", "code": "COGS 13", "instructor": "Federico Rossano", "term": "Spring 2026", "quarterStartDate": "2026-03-30", "quarterEndDate": "2026-06-06", "schedule": [{"dayOfWeek": "Tuesday", "startTime": "12:30", "endTime": "13:50", "location": "PETER 108", "type": "lecture"}, {"dayOfWeek": "Thursday", "startTime": "12:30", "endTime": "13:50", "location": "PETER 108", "type": "lecture"}, {"dayOfWeek": "Wednesday", "startTime": "14:00", "endTime": "15:00", "location": "CSE 4258", "type": "office_hours", "host": "Prof. Rossano"}, {"dayOfWeek": "Friday", "startTime": "10:00", "endTime": "11:00", "location": "CSE 4110", "type": "office_hours", "host": "TA Josh"}, {"dayOfWeek": "Monday", "startTime": "08:00", "endTime": "10:59", "location": "PETER 108", "type": "final"}], "syllabusText": "...", "syllabusUrl": "https://...", "externalLinks": ["https://piazza.com/class/abc123"], "description": "...", "rawNotes": "everything else you found" }] }
+{ "courses": [{ "canvasId": "74024", "name": "Field Methods: Cognition in the Wild", "code": "COGS 13", "instructor": "Federico Rossano", "term": "Spring 2026", "quarterStartDate": "2026-03-30", "quarterEndDate": "2026-06-06", "schedule": [{"dayOfWeek": "Tuesday", "startTime": "12:30", "endTime": "13:50", "location": "PETER 108", "type": "lecture"}, {"dayOfWeek": "Wednesday", "startTime": "14:00", "endTime": "15:00", "location": "CSE 4258", "type": "office_hours", "host": "Prof. Rossano"}, {"dayOfWeek": "Monday", "startTime": "08:00", "endTime": "10:59", "location": "PETER 108", "type": "final"}], "assignments": [{"id": "12345", "title": "Essay 1", "dueDate": "2026-04-26", "points": 100, "type": "essay"}, {"id": "12346", "title": "Final Exam", "dueDate": "2026-06-08", "points": 200, "type": "exam"}], "syllabusText": "...", "syllabusUrl": "https://...", "externalLinks": ["https://piazza.com/class/abc123"], "description": "...", "rawNotes": "everything else you found" }] }
 
 Do NOT save to a file. Do NOT use workspace. Return the JSON directly in your output.`;
 
@@ -160,7 +162,7 @@ SCHEDULE ENTRY RULES:
 
 Return ALL data as JSON in your output. Include everything you found previously plus new discoveries.
 CRITICAL: Your FINAL response must be ONLY the JSON object — no file saving, no workspace. Format:
-{ "courses": [{ "canvasId": "74024", "name": "Field Methods: Cognition in the Wild", "code": "COGS 13", "instructor": "...", "term": "Spring 2026", "quarterStartDate": "2026-03-30", "quarterEndDate": "2026-06-06", "schedule": [{"dayOfWeek": "Tuesday", "startTime": "12:30", "endTime": "13:50", "location": "PETER 108", "type": "lecture"}, {"dayOfWeek": "Wednesday", "startTime": "14:00", "endTime": "15:00", "location": "CSE 4258", "type": "office_hours", "host": "Prof. Rossano"}], "syllabusText": "...", "syllabusUrl": "https://...", "externalLinks": ["https://piazza.com/class/abc123"], "description": "...", "rawNotes": "everything else you found" }] }`;
+{ "courses": [{ "canvasId": "74024", "name": "Field Methods: Cognition in the Wild", "code": "COGS 13", "instructor": "...", "term": "Spring 2026", "quarterStartDate": "2026-03-30", "quarterEndDate": "2026-06-06", "schedule": [{"dayOfWeek": "Tuesday", "startTime": "12:30", "endTime": "13:50", "location": "PETER 108", "type": "lecture"}, {"dayOfWeek": "Wednesday", "startTime": "14:00", "endTime": "15:00", "location": "CSE 4258", "type": "office_hours", "host": "Prof. Rossano"}], "assignments": [{"id": "12345", "title": "Essay 1", "dueDate": "2026-04-26", "points": 100, "type": "essay"}], "syllabusText": "...", "syllabusUrl": "https://...", "externalLinks": ["https://piazza.com/class/abc123"], "description": "...", "rawNotes": "everything else you found" }] }`;
 
 const EXTERNAL_URL_PROMPT = (externalUrl: string) => `The user wants you to crawl an external class website to extract course information.
 
@@ -187,7 +189,7 @@ SCHEDULE ENTRY RULES:
 - Finals/midterms: include with type "final"/"midterm".
 
 CRITICAL: Return ONLY a JSON object as your final output — no file saving, no workspace:
-{ "courses": [{ "canvasId": "external", "name": "Field Methods: Cognition in the Wild", "code": "COGS 13", "instructor": "...", "term": "Spring 2026", "schedule": [{"dayOfWeek": "Tuesday", "startTime": "12:30", "endTime": "13:50", "location": "PETER 108", "type": "lecture"}, {"dayOfWeek": "Wednesday", "startTime": "14:00", "endTime": "15:00", "location": "CSE 4258", "type": "office_hours", "host": "Prof. Rossano"}], "syllabusText": "...", "syllabusUrl": "${externalUrl}", "externalLinks": ["https://piazza.com/class/abc123"], "description": "...", "rawNotes": "everything else you found" }] }`;
+{ "courses": [{ "canvasId": "external", "name": "Field Methods: Cognition in the Wild", "code": "COGS 13", "instructor": "...", "term": "Spring 2026", "schedule": [{"dayOfWeek": "Tuesday", "startTime": "12:30", "endTime": "13:50", "location": "PETER 108", "type": "lecture"}], "assignments": [{"id": "hw1", "title": "Problem Set 1", "dueDate": "2026-04-10", "points": 50, "type": "homework"}], "syllabusText": "...", "syllabusUrl": "${externalUrl}", "externalLinks": ["https://piazza.com/class/abc123"], "description": "...", "rawNotes": "everything else you found" }] }`;
 
 /**
  * Step 2: Scrape using the SAME session the user logged into.
@@ -378,8 +380,8 @@ async function runScrapeTask(
       : SCRAPE_PROMPT(url);
   const run = client.run(prompt, {
     sessionId: buSessionId,
-    model: "bu-max",
-    timeout: 600_000,
+    model: "bu-mini",
+    timeout: 1_200_000,
   });
 
   // Stream steps for live progress
@@ -534,6 +536,8 @@ async function saveCourses(courses: ScrapedCourse[], userId: string) {
       scrapeDepth: 2,
     };
 
+    let classId: string;
+
     if (existing) {
       await repo.updateClass(existing.id, {
         ...classData,
@@ -548,13 +552,44 @@ async function saveCourses(courses: ScrapedCourse[], userId: string) {
         syllabusUrl: course.syllabusUrl || existing.syllabusUrl,
         description: course.description || existing.description,
       });
+      classId = existing.id;
     } else {
-      await repo.createClass({
+      const created = await repo.createClass({
         userId,
         canvasId: course.canvasId || resolvedCode,
         enabled: true,
         ...classData,
       });
+      classId = created.id;
+    }
+
+    // Save scraped assignments
+    if (course.assignments && course.assignments.length > 0) {
+      for (const a of course.assignments) {
+        if (!a.dueDate) continue;
+        try {
+          const existing = await assignmentProvider.getAssignmentsForClass(userId, classId);
+          const dup = existing.find(
+            (ex) => ex.canvasAssignmentId === a.id || ex.title === a.title
+          );
+          if (dup) continue;
+
+          await assignmentProvider.createAssignment({
+            userId,
+            classId,
+            title: a.title,
+            description: a.description,
+            dueDate: a.dueDate,
+            points: a.points,
+            type: (a.type as "homework" | "project" | "exam" | "quiz" | "lab" | "other") ?? "homework",
+            source: "canvas",
+            canvasAssignmentId: a.id,
+            completed: false,
+          });
+        } catch (err) {
+          console.error(`[canvas-scraper] Failed to save assignment "${a.title}":`, err);
+        }
+      }
     }
   }
 }

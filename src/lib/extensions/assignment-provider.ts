@@ -1,19 +1,45 @@
-// ============================================================
-// IAssignmentProvider implementation
-// Drop into src/lib/extensions/assignment-provider.ts
-// ============================================================
 import { v4 as uuidv4 } from "uuid";
 import { repo } from "@/lib/db";
 import { getClient } from "@/lib/browser-use/client";
+import { readCollection, writeCollection } from "@/lib/db/json/store";
+import { callAI } from "@/lib/ai/openrouter";
 import type { IAssignment, IMilestone, IAssignmentProvider } from "./assignment-types";
 
-const assignmentsStore = new Map<string, IAssignment>();
+const COLLECTION = "assignments";
+const callClaude = callAI;
 
 function now(): string {
   return new Date().toISOString();
 }
 
-// Spread N milestones evenly between today and the due date
+function loadAll(): IAssignment[] {
+  return readCollection<IAssignment>(COLLECTION);
+}
+
+function saveAll(assignments: IAssignment[]) {
+  writeCollection(COLLECTION, assignments);
+}
+
+function findById(id: string): IAssignment | undefined {
+  return loadAll().find((a) => a.id === id);
+}
+
+function upsert(assignment: IAssignment) {
+  const all = loadAll();
+  const idx = all.findIndex((a) => a.id === assignment.id);
+  if (idx >= 0) all[idx] = assignment;
+  else all.push(assignment);
+  saveAll(all);
+}
+
+function removeById(id: string): boolean {
+  const all = loadAll();
+  const filtered = all.filter((a) => a.id !== id);
+  if (filtered.length === all.length) return false;
+  saveAll(filtered);
+  return true;
+}
+
 function spreadMilestoneDates(dueDate: string, count: number): string[] {
   const due = new Date(dueDate).getTime();
   const start = Date.now();
@@ -23,18 +49,15 @@ function spreadMilestoneDates(dueDate: string, count: number): string[] {
   );
 }
 
-import { callAI } from "@/lib/ai/openrouter";
-const callClaude = callAI;
-
 export const assignmentProvider: IAssignmentProvider = {
   async getAssignmentsForClass(userId, classId) {
-    return [...assignmentsStore.values()]
+    return loadAll()
       .filter((a) => a.userId === userId && a.classId === classId)
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   },
 
   async getAllAssignments(userId) {
-    return [...assignmentsStore.values()]
+    return loadAll()
       .filter((a) => a.userId === userId)
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   },
@@ -48,35 +71,35 @@ export const assignmentProvider: IAssignmentProvider = {
       createdAt: now(),
       updatedAt: now(),
     };
-    assignmentsStore.set(assignment.id, assignment);
+    upsert(assignment);
     return assignment;
   },
 
   async updateAssignment(id, updates) {
-    const existing = assignmentsStore.get(id);
+    const existing = findById(id);
     if (!existing) return null;
     const updated = { ...existing, ...updates, updatedAt: now() };
-    assignmentsStore.set(id, updated);
+    upsert(updated);
     return updated;
   },
 
   async deleteAssignment(id) {
-    return assignmentsStore.delete(id);
+    return removeById(id);
   },
 
   async updateMilestone(assignmentId, milestoneId, updates) {
-    const assignment = assignmentsStore.get(assignmentId);
+    const assignment = findById(assignmentId);
     if (!assignment) return null;
     const milestones = assignment.milestones.map((m) =>
       m.id === milestoneId ? { ...m, ...updates } : m
     );
     const updated = { ...assignment, milestones, updatedAt: now() };
-    assignmentsStore.set(assignmentId, updated);
+    upsert(updated);
     return updated;
   },
 
   async generateMilestones(assignmentId) {
-    const assignment = assignmentsStore.get(assignmentId);
+    const assignment = findById(assignmentId);
     if (!assignment) throw new Error("Assignment not found");
 
     const cls = await repo.findClassById(assignment.classId);
@@ -86,7 +109,6 @@ export const assignmentProvider: IAssignmentProvider = {
       (new Date(assignment.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
     );
 
-    // Decide how many milestones based on days until due and type
     const count =
       assignment.type === "project" ? 5 :
       assignment.type === "exam" ? 4 :
@@ -135,7 +157,7 @@ Example format:
     }));
 
     const updated = { ...assignment, milestones, updatedAt: now() };
-    assignmentsStore.set(assignmentId, updated);
+    upsert(updated);
     return updated;
   },
 
@@ -143,8 +165,6 @@ Example format:
     const cls = await repo.findClassById(classId);
     if (!cls) throw new Error("Class not found");
 
-    // Extract assignments from already-scraped class data using Claude
-    // instead of spinning up a new Browser Use session
     const rawData = cls.rawData as Record<string, string> | undefined;
     const syllabusText = rawData?.syllabusText ?? "";
     const rawNotes = rawData?.rawNotes ?? "";
@@ -188,9 +208,10 @@ Return ONLY a JSON array, no other text. If no assignments are found, return [].
       console.error("Failed to parse assignment extraction response");
     }
 
+    const allExisting = loadAll();
     const created: IAssignment[] = [];
     for (const a of scraped) {
-      const exists = [...assignmentsStore.values()].find(
+      const exists = allExisting.find(
         (ex) =>
           ex.userId === userId &&
           ex.classId === classId &&
@@ -218,7 +239,7 @@ Return ONLY a JSON array, no other text. If no assignments are found, return [].
   },
 
   async exportToCalendar(assignmentId, userId) {
-    const assignment = assignmentsStore.get(assignmentId);
+    const assignment = findById(assignmentId);
     if (!assignment) throw new Error("Assignment not found");
 
     const cls = await repo.findClassById(assignment.classId);
@@ -233,12 +254,12 @@ Return ONLY a JSON array, no other text. If no assignments are found, return [].
     try {
       const events = [
         {
-          title: `📋 DUE: ${assignment.title}`,
+          title: `DUE: ${assignment.title}`,
           date: assignment.dueDate,
           description: `${cls?.code ?? ""} assignment due today.\n${assignment.description ?? ""}`,
         },
         ...assignment.milestones.map((m) => ({
-          title: `✅ ${m.title}`,
+          title: m.title,
           date: m.dueDate,
           description: `Milestone for ${assignment.title} (${cls?.code ?? ""}): ${m.description}`,
         })),
@@ -255,7 +276,7 @@ Return ONLY a JSON array, no other text. If no assignments are found, return [].
       for await (const _step of run) { /* progress */ }
 
       const updated = { ...assignment, calendarExported: true, updatedAt: now() };
-      assignmentsStore.set(assignmentId, updated);
+      upsert(updated);
       return true;
     } finally {
       await client.sessions.stop(session.id);

@@ -1,32 +1,40 @@
-// ============================================================
-// ITodoProvider implementation
-// Drop into src/lib/extensions/todo-provider.ts
-// ============================================================
 import { v4 as uuidv4 } from "uuid";
 import { repo } from "@/lib/db";
 import { getClient } from "@/lib/browser-use/client";
+import { readCollection, writeCollection } from "@/lib/db/json/store";
 import type { ITodo, ITodoProvider } from "./types";
 
-// In-memory store (JSON dev mode) — swapped for MongoDB in production
-// We piggyback on the existing repo's rawData field or store in a separate JSON file.
-// For simplicity, todos are stored as a JSON sidecar via the same pattern as other models.
-// In production (mongo mode) you'd add a Todos collection; for dev we use an in-process map.
-
-const todosStore = new Map<string, ITodo>();
+const COLLECTION = "todos";
 
 function now(): string {
   return new Date().toISOString();
 }
 
+function loadAll(): ITodo[] {
+  return readCollection<ITodo>(COLLECTION);
+}
+
+function saveAll(todos: ITodo[]) {
+  writeCollection(COLLECTION, todos);
+}
+
+function upsert(todo: ITodo) {
+  const all = loadAll();
+  const idx = all.findIndex((t) => t.id === todo.id);
+  if (idx >= 0) all[idx] = todo;
+  else all.push(todo);
+  saveAll(all);
+}
+
 export const todoProvider: ITodoProvider = {
   async getTodosForClass(userId, classId) {
-    return [...todosStore.values()].filter(
+    return loadAll().filter(
       (t) => t.userId === userId && t.classId === classId
     );
   },
 
   async getAllTodos(userId) {
-    return [...todosStore.values()]
+    return loadAll()
       .filter((t) => t.userId === userId)
       .sort((a, b) => {
         if (!a.dueDate) return 1;
@@ -41,34 +49,36 @@ export const todoProvider: ITodoProvider = {
       id: uuidv4(),
       createdAt: now(),
     };
-    todosStore.set(todo.id, todo);
+    upsert(todo);
     return todo;
   },
 
   async updateTodo(id, updates) {
-    const existing = todosStore.get(id);
+    const all = loadAll();
+    const existing = all.find((t) => t.id === id);
     if (!existing) return null;
     const updated = { ...existing, ...updates };
-    todosStore.set(id, updated);
+    upsert(updated);
     return updated;
   },
 
   async deleteTodo(id) {
-    return todosStore.delete(id);
+    const all = loadAll();
+    const filtered = all.filter((t) => t.id !== id);
+    if (filtered.length === all.length) return false;
+    saveAll(filtered);
+    return true;
   },
 
   async syncFromCanvas(userId, classId, canvasUrl) {
-    // Get the class to find canvasId
     const cls = await repo.findClassById(classId);
     if (!cls) throw new Error("Class not found");
 
-    // Find an existing browser profile for this user
     const profile = await repo.findProfileByUserAndService(userId, "canvas");
     if (!profile) {
       throw new Error("No Canvas session found. Please connect Canvas first.");
     }
 
-    // Start a short Browser Use session using the saved Canvas profile
     const session = await getClient().sessions.create({
       profileId: profile.profileId,
     });
@@ -90,7 +100,6 @@ export const todoProvider: ITodoProvider = {
         model: "bu-max",
       });
 
-      // Parse the result
       let assignments: Array<{
         id: string;
         title: string;
@@ -106,17 +115,16 @@ export const todoProvider: ITodoProvider = {
         console.error("Failed to parse Canvas assignments JSON", result);
       }
 
-      // Upsert todos from assignments
+      const allExisting = loadAll();
       const created: ITodo[] = [];
       for (const assignment of assignments) {
-        // Check if we already have this assignment
-        const existing = [...todosStore.values()].find(
+        const exists = allExisting.find(
           (t) =>
             t.userId === userId &&
             t.classId === classId &&
             t.canvasAssignmentId === assignment.id
         );
-        if (existing) continue;
+        if (exists) continue;
 
         const todo = await todoProvider.createTodo({
           userId,

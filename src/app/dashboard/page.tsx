@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { ClassList } from "@/components/dashboard/ClassList";
 import { CrawlExternalUrl } from "@/components/dashboard/CrawlExternalUrl";
 import { SmartDayView } from "@/components/productivity/SmartDayView";
+import { ScheduleChat } from "@/components/dashboard/ScheduleChat";
 import { useClasses } from "@/hooks/useClasses";
 import { useTravelPreferences } from "@/hooks/useTravelPreferences";
 import { ALL_RESIDENCES, locationLabel } from "@/lib/travel/walking-times";
@@ -36,7 +37,7 @@ function HeroBanner() {
 
 export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>("today");
-  const { classes } = useClasses();
+  const { classes, fetchClasses } = useClasses();
   const { prefs, setHomeBase } = useTravelPreferences();
   const [dismissed, setDismissed] = useState(false);
 
@@ -119,7 +120,10 @@ export default function DashboardPage() {
           <SmartDayView />
         </div>
       ) : (
-        <ClassList />
+        <div className="space-y-6">
+          <ClassList />
+          <ScheduleChat onClassUpdated={fetchClasses} />
+        </div>
       )}
 
     </div>

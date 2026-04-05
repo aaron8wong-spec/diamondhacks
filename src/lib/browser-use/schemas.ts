@@ -9,6 +9,15 @@ export const CourseScheduleSchema = z.object({
   type: z.string().describe("Type: lecture, discussion, lab, office_hours, final, midterm, or other"),
 });
 
+export const ScrapedAssignmentSchema = z.object({
+  id: z.string().describe("Canvas assignment ID from the URL, or a short unique identifier"),
+  title: z.string().describe("Assignment name"),
+  description: z.string().optional().describe("Brief description if available"),
+  dueDate: z.string().optional().describe("Due date in ISO format YYYY-MM-DD, or null if unknown"),
+  points: z.number().optional().describe("Point value if shown"),
+  type: z.string().describe("One of: homework, project, exam, quiz, lab, essay, other"),
+});
+
 export const ScrapedCourseSchema = z.object({
   canvasId: z.string().describe("Canvas course ID from the URL"),
   name: z.string().describe("Full course name"),
@@ -16,6 +25,7 @@ export const ScrapedCourseSchema = z.object({
   instructor: z.string().describe("Instructor name"),
   term: z.string().describe("Term, e.g. 'Spring 2026'"),
   schedule: z.array(CourseScheduleSchema),
+  assignments: z.array(ScrapedAssignmentSchema).optional().describe("All assignments, exams, quizzes, essays, and projects found with due dates"),
   quarterStartDate: z.string().optional().describe("First day of instruction for this term, ISO format YYYY-MM-DD if found"),
   quarterEndDate: z.string().optional().describe("Last day of instruction for this term, ISO format YYYY-MM-DD if found"),
   syllabusText: z.string().optional().describe("Full syllabus text if available"),
