@@ -197,13 +197,186 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {/* Email Reminders */}
+      {/* Auto Reminders */}
+      <AutoReminderSettings />
+
+      {/* Manual Email Test */}
       <EmailSettings />
     </div>
   );
 }
 
-// ── Email Settings sub-component ──────────────────────────────────
+// ── Auto Reminder Settings ────────────────────────────────────────
+
+function AutoReminderSettings() {
+  const [email, setEmail] = useState("");
+  const [leaveEnabled, setLeaveEnabled] = useState(false);
+  const [dueEnabled, setDueEnabled] = useState(false);
+  const [minutesBefore, setMinutesBefore] = useState(5);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [reminderId, setReminderId] = useState<string | null>(null);
+
+  // Load existing auto-reminder config on mount
+  useState(() => {
+    fetch("/api/reminders").then((r) => r.json()).then((d) => {
+      const reminders = d.reminders ?? [];
+      // Look for our auto-reminder sentinel (classId = "__auto__")
+      const auto = reminders.find((r: { classId: string }) => r.classId === "__auto__");
+      if (auto) {
+        setEmail(auto.destination || "");
+        setMinutesBefore(auto.minutesBefore || 5);
+        setLeaveEnabled(true);
+        setDueEnabled(true);
+        setReminderId(auto.id);
+      }
+      setLoaded(true);
+    }).catch(() => setLoaded(true));
+  });
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      if (!leaveEnabled && !dueEnabled) {
+        // Delete existing reminder if disabling
+        if (reminderId) {
+          await fetch(`/api/reminders/${reminderId}`, { method: "DELETE" });
+          setReminderId(null);
+        }
+      } else if (reminderId) {
+        // Update existing
+        await fetch(`/api/reminders/${reminderId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            destination: email,
+            minutesBefore,
+          }),
+        });
+      } else {
+        // Create new auto-reminder sentinel
+        const res = await fetch("/api/reminders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            classId: "__auto__",
+            channel: "email",
+            destination: email,
+            minutesBefore,
+            scheduledFor: new Date().toISOString(),
+          }),
+        });
+        const data = await res.json();
+        if (data.reminder?.id) setReminderId(data.reminder.id);
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch { /* ignore */ }
+    setSaving(false);
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <Card className="p-6 space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Automatic Reminders</h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Get email reminders before classes and when assignments are due. Runs automatically in the background.
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Reminder email address
+        </label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@ucsd.edu"
+          className="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <div className="space-y-3">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={leaveEnabled}
+            onChange={(e) => setLeaveEnabled(e.target.checked)}
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+          />
+          <div>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Leave-for-class reminders</span>
+            <p className="text-xs text-gray-400">
+              Email before you need to leave, based on walking time to the building.
+            </p>
+          </div>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={dueEnabled}
+            onChange={(e) => setDueEnabled(e.target.checked)}
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+          />
+          <div>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Assignment due-date reminders</span>
+            <p className="text-xs text-gray-400">
+              Email at 6 PM the day before an assignment is due.
+            </p>
+          </div>
+        </label>
+      </div>
+
+      {leaveEnabled && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Remind me this many minutes before I need to leave
+          </label>
+          <select
+            value={minutesBefore}
+            onChange={(e) => setMinutesBefore(parseInt(e.target.value))}
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+          >
+            <option value={3}>3 minutes</option>
+            <option value={5}>5 minutes</option>
+            <option value={10}>10 minutes</option>
+            <option value={15}>15 minutes</option>
+            <option value={30}>30 minutes</option>
+          </select>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3">
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={saving || (!(leaveEnabled || dueEnabled) && !reminderId) || ((leaveEnabled || dueEnabled) && !email.trim())}
+        >
+          {saving ? "Saving..." : "Save"}
+        </Button>
+        {saved && (
+          <span className="text-sm text-green-600">
+            {leaveEnabled || dueEnabled ? "Auto-reminders enabled!" : "Auto-reminders disabled."}
+          </span>
+        )}
+      </div>
+
+      {(leaveEnabled || dueEnabled) && email && (
+        <p className="text-xs text-gray-400">
+          Reminders will be sent to <span className="font-medium">{email}</span> automatically while the server is running.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+// ── Email Settings sub-component (manual test sends) ─────────────
 
 interface ClassScheduleEntry {
   dayOfWeek: number;

@@ -40,7 +40,9 @@ export function generateTravelEvents(
   const byDate = new Map<string, CalendarEvent[]>();
   for (const ev of classEvents) {
     if (!CLASS_TYPES.has(ev.type)) continue;
-    const dateKey = ev.startTime.toISOString().split("T")[0];
+    // Use local date, not UTC — toISOString() shifts late evening events to the next day
+    const d = ev.startTime;
+    const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     let arr = byDate.get(dateKey);
     if (!arr) { arr = []; byDate.set(dateKey, arr); }
     arr.push(ev);
