@@ -91,6 +91,7 @@ interface CalendarWeekViewProps {
   onSelectEvent: (id: string | null) => void;
   skippedEventIds?: string[];
   onToggleSkip?: (id: string) => void;
+  noTravelTypes?: Set<string>;
   onNavigateToDate: (d: Date) => void;
 }
 
@@ -102,6 +103,7 @@ export function CalendarWeekView({
   onNavigateToDate,
   skippedEventIds = [],
   onToggleSkip,
+  noTravelTypes,
 }: CalendarWeekViewProps) {
   const days = getWeekDays(currentDate);
   const [now, setNow] = useState(new Date());
@@ -309,18 +311,24 @@ export function CalendarWeekView({
                   {ev.description}
                 </p>
               )}
-              {onToggleSkip && ev.type !== "travel" && (
-                <button
-                  onClick={() => onToggleSkip(ev.id)}
-                  className={`text-xs mt-1 pt-1 border-t border-stone-100 w-full text-left ${
-                    skippedEventIds.includes(ev.id)
-                      ? "text-green-600 hover:text-green-700"
-                      : "text-stone-400 hover:text-red-500"
-                  }`}
-                >
-                  {skippedEventIds.includes(ev.id) ? "Mark as attending" : "Skip (no travel)"}
-                </button>
-              )}
+              {onToggleSkip && ev.type !== "travel" && ev.type !== "final" && (() => {
+                const isSkipped = skippedEventIds.includes(ev.id);
+                const typeOff = (noTravelTypes ?? new Set()).has(ev.type);
+                // Effective state: travel is off if type toggle is off OR individually skipped
+                const effectivelyOff = typeOff || isSkipped;
+                return (
+                  <button
+                    onClick={() => onToggleSkip(ev.id)}
+                    className={`text-xs mt-1 pt-1 border-t border-stone-100 w-full text-left ${
+                      effectivelyOff
+                        ? "text-stone-400 hover:text-green-600"
+                        : "text-stone-400 hover:text-red-500"
+                    }`}
+                  >
+                    {effectivelyOff ? "Enable travel" : "Skip (no travel)"}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         );

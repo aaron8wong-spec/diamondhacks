@@ -60,16 +60,19 @@ export function generateTravelEvents(
 
     for (let i = 0; i < sorted.length; i++) {
       const classEv = sorted[i];
-      const isSkipped = prefs.skippedEventIds.includes(classEv.id);
+      const isToggled = prefs.skippedEventIds.includes(classEv.id);
+      const typeEnabled = isTravelEnabledForType(classEv.type, prefs);
 
-      // Skipped events: you won't be there, don't update location, no travel
-      if (isSkipped) continue;
+      // skippedEventIds acts as an override toggle:
+      // - type ON + toggled = skip (no travel)
+      // - type OFF + toggled = enable (override)
+      // - type ON + not toggled = travel
+      // - type OFF + not toggled = no travel
+      const wantTravel = typeEnabled ? !isToggled : isToggled;
 
       const building = classEv.location
         ? parseLocationToBuilding(classEv.location)
         : null;
-
-      const wantTravel = isTravelEnabledForType(classEv.type, prefs);
 
       if (wantTravel && building) {
         // Determine origin
@@ -120,12 +123,12 @@ export function generateTravelEvents(
         }
       }
 
-      // Update physical location for ALL attended (non-skipped) events,
-      // regardless of whether travel was shown for them
-      if (building) {
+      // Only update physical location for events with travel enabled.
+      // If travel is off for a type (e.g. OH), treat it as if you're not going.
+      if (wantTravel && building) {
         currentBuilding = building;
+        currentEndTime = classEv.endTime;
       }
-      currentEndTime = classEv.endTime;
       hadAnyEvent = true;
     }
   }

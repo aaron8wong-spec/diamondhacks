@@ -54,6 +54,7 @@ interface CalendarDayViewProps {
   onNavigateToDate: (d: Date) => void;
   skippedEventIds?: string[];
   onToggleSkip?: (id: string) => void;
+  noTravelTypes?: Set<string>;
 }
 
 export function CalendarDayView({
@@ -63,6 +64,7 @@ export function CalendarDayView({
   onSelectEvent,
   skippedEventIds = [],
   onToggleSkip,
+  noTravelTypes,
 }: CalendarDayViewProps) {
   const [now, setNow] = useState(new Date());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -264,18 +266,23 @@ export function CalendarDayView({
                 {selectedEvent.description}
               </p>
             )}
-            {onToggleSkip && selectedEvent.type !== "travel" && (
-              <button
-                onClick={() => onToggleSkip(selectedEvent.id)}
-                className={`text-xs mt-2 pt-2 border-t border-stone-100 w-full text-left ${
-                  skippedEventIds.includes(selectedEvent.id)
-                    ? "text-green-600 hover:text-green-700"
-                    : "text-stone-400 hover:text-red-500"
-                }`}
-              >
-                {skippedEventIds.includes(selectedEvent.id) ? "Mark as attending" : "Skip (no travel)"}
-              </button>
-            )}
+            {onToggleSkip && selectedEvent.type !== "travel" && selectedEvent.type !== "final" && (() => {
+              const isSkipped = skippedEventIds.includes(selectedEvent.id);
+              const typeOff = (noTravelTypes ?? new Set()).has(selectedEvent.type);
+              const effectivelyOff = typeOff || isSkipped;
+              return (
+                <button
+                  onClick={() => onToggleSkip(selectedEvent.id)}
+                  className={`text-xs mt-2 pt-2 border-t border-stone-100 w-full text-left ${
+                    effectivelyOff
+                      ? "text-stone-400 hover:text-green-600"
+                      : "text-stone-400 hover:text-red-500"
+                  }`}
+                >
+                  {effectivelyOff ? "Enable travel" : "Skip (no travel)"}
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}

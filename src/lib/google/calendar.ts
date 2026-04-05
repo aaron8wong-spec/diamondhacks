@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import type { IClassInfo } from "@/lib/db/types";
-import { getQuarterDates, inferQuarterWeeks, getFirstDayInQuarter, getFinalExamDate } from "@/lib/quarter-dates";
+import { getQuarterDates, inferQuarterWeeks, getFirstDayInQuarter, getFinalExamDate, getMidtermDate } from "@/lib/quarter-dates";
 import { parseLocationToBuilding, getWalkingMinutes, locationLabel } from "@/lib/travel/walking-times";
 
 const DAY_MAP: Record<number, string> = {
@@ -185,7 +185,9 @@ export async function exportClassesToCalendar(
 
       // Finals/midterms: single non-recurring event on the exam date
       if (slotType === "final" || slotType === "midterm") {
-        const examDate = getFinalExamDate(cls.term, slot.dayOfWeek);
+        const examDate = slotType === "midterm"
+          ? getMidtermDate(cls.term, slot.dayOfWeek)
+          : getFinalExamDate(cls.term, slot.dayOfWeek);
         if (!examDate) continue;
         const label = slotType === "final" ? "FINAL" : "MIDTERM";
         try {
