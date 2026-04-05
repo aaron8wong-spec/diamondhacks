@@ -135,6 +135,13 @@ export function CalendarExport() {
           calendarId: selectedCalendarId,
           includeTravelEvents: includeTravelEvents && !!exportHomeBase,
           homeBase: exportHomeBase,
+          travelPrefs: {
+            travelForLectures: travelPrefs.travelForLectures,
+            travelForDiscussions: travelPrefs.travelForDiscussions,
+            travelForLabs: travelPrefs.travelForLabs,
+            travelForOfficeHours: travelPrefs.travelForOfficeHours,
+            skippedEventIds: travelPrefs.skippedEventIds,
+          },
         }),
       });
       const data = await res.json();

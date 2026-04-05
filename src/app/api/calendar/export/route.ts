@@ -37,6 +37,7 @@ export const POST = withAuth(async (req, user) => {
             enabledClasses,
             body.homeBase,
             body.calendarId || "primary",
+            body.travelPrefs,
           );
         }
 

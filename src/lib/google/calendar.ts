@@ -254,18 +254,44 @@ export async function exportClassesToCalendar(
 
 /**
  * Export travel buffer events to Google Calendar.
- * Creates a recurring "Walk to {building}" event before each class.
+ * Uses the same per-type toggle and override logic as the client-side generator.
  */
 export async function exportTravelEventsToCalendar(
   refreshToken: string,
   classes: IClassInfo[],
   homeBase: string | null,
   calendarId: string = "primary",
+  travelPrefs?: {
+    travelForLectures?: boolean;
+    travelForDiscussions?: boolean;
+    travelForLabs?: boolean;
+    travelForOfficeHours?: boolean;
+    skippedEventIds?: string[];
+  },
 ): Promise<{ eventsCreated: number; errors: string[] }> {
   const auth = getAuthedClient(refreshToken);
   const calendar = google.calendar({ version: "v3", auth });
   const errors: string[] = [];
   let eventsCreated = 0;
+
+  const prefs = {
+    travelForLectures: travelPrefs?.travelForLectures ?? true,
+    travelForDiscussions: travelPrefs?.travelForDiscussions ?? true,
+    travelForLabs: travelPrefs?.travelForLabs ?? true,
+    travelForOfficeHours: travelPrefs?.travelForOfficeHours ?? false,
+    skippedEventIds: travelPrefs?.skippedEventIds ?? [],
+  };
+
+  function wantTravelForSlot(slotType: string): boolean {
+    const t = slotType.toLowerCase();
+    switch (t) {
+      case "lecture": return prefs.travelForLectures;
+      case "discussion": return prefs.travelForDiscussions;
+      case "lab": return prefs.travelForLabs;
+      case "office_hours": return prefs.travelForOfficeHours;
+      default: return false;
+    }
+  }
 
   let timeZone = "America/Los_Angeles";
   try {
@@ -273,18 +299,18 @@ export async function exportTravelEventsToCalendar(
     if (settings.data.value) timeZone = settings.data.value;
   } catch { /* use default */ }
 
-  // For each class, find consecutive pairs by day-of-week
   const enabledClasses = classes.filter((c) => c.enabled);
 
   // Group all schedule slots by dayOfWeek
-  const slotsByDay = new Map<number, { cls: IClassInfo; slot: IClassInfo["schedule"][number] }[]>();
+  const slotsByDay = new Map<number, { cls: IClassInfo; slot: IClassInfo["schedule"][number]; slotIndex: number }[]>();
   for (const cls of enabledClasses) {
-    for (const slot of cls.schedule) {
+    for (let si = 0; si < cls.schedule.length; si++) {
+      const slot = cls.schedule[si];
       const t = slot.type?.toLowerCase() ?? "";
       if (t === "final" || t === "midterm") continue;
       let arr = slotsByDay.get(slot.dayOfWeek);
       if (!arr) { arr = []; slotsByDay.set(slot.dayOfWeek, arr); }
-      arr.push({ cls, slot });
+      arr.push({ cls, slot, slotIndex: si });
     }
   }
 
@@ -292,65 +318,63 @@ export async function exportTravelEventsToCalendar(
     const rruleDay = DAY_MAP[dayOfWeek];
     if (!rruleDay) continue;
 
-    // Sort by start time
     const sorted = [...slots].sort((a, b) => a.slot.startTime.localeCompare(b.slot.startTime));
 
+    let currentBuilding: string | null = null;
+
     for (let i = 0; i < sorted.length; i++) {
-      const { cls, slot } = sorted[i];
-      const toBuilding = slot.location ? parseLocationToBuilding(slot.location) : null;
-      if (!toBuilding) continue;
+      const { cls, slot, slotIndex } = sorted[i];
+      const building = slot.location ? parseLocationToBuilding(slot.location) : null;
+      const typeEnabled = wantTravelForSlot(slot.type);
 
-      let fromName: string | null;
-      let prevEndTime: string | null = null;
-      if (i === 0) {
-        fromName = homeBase;
-      } else {
-        const prevSlot = sorted[i - 1].slot;
-        fromName = prevSlot.location ? parseLocationToBuilding(prevSlot.location) : null;
-        prevEndTime = prevSlot.endTime;
+      // Check if individually toggled (override)
+      // Event IDs in the calendar use format: cls-{classId}-s{slotIndex}-w{week}
+      // For export we check the base pattern without week
+      const eventIdBase = `cls-${cls.id}-s${slotIndex}`;
+      const isToggled = prefs.skippedEventIds.some((id) => id.startsWith(eventIdBase));
+      const wantTravel = typeEnabled ? !isToggled : isToggled;
+
+      if (wantTravel && building) {
+        const fromName: string | null = currentBuilding ?? homeBase;
+
+        if (fromName && fromName !== building) {
+          const walkMins = getWalkingMinutes(fromName, building);
+          if (walkMins != null && walkMins > 0) {
+            const [startH, startM] = slot.startTime.split(":").map(Number);
+            const travelEndMinutes = startH * 60 + startM;
+            const travelStartMinutes = travelEndMinutes - walkMins;
+
+            const travelStartStr = `${String(Math.floor(travelStartMinutes / 60)).padStart(2, "0")}:${String(travelStartMinutes % 60).padStart(2, "0")}`;
+            const travelEndStr = slot.startTime;
+
+            const quarterStart = resolveQuarterStart(cls);
+            const weeks = inferQuarterWeeks(cls.term);
+            const firstDate = getFirstDayInQuarter(quarterStart, dayOfWeek);
+
+            try {
+              await calendar.events.insert({
+                calendarId,
+                requestBody: {
+                  summary: `${fromName} → ${building}`,
+                  description: `${walkMins} min walk`,
+                  colorId: "6",
+                  start: { dateTime: `${firstDate}T${travelStartStr}:00`, timeZone },
+                  end: { dateTime: `${firstDate}T${travelEndStr}:00`, timeZone },
+                  recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${rruleDay};COUNT=${weeks}`],
+                },
+              });
+              eventsCreated++;
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : "Unknown error";
+              errors.push(`Travel to ${building} on ${rruleDay}: ${msg}`);
+            }
+          }
+        }
       }
 
-      if (!fromName || fromName === toBuilding) continue;
-      const walkMins = getWalkingMinutes(fromName, toBuilding);
-      if (walkMins == null || walkMins === 0) continue;
-
-      const totalMins = walkMins + 2; // peak buffer
-
-      // Compute travel end time (= class start) and start time
-      const [startH, startM] = slot.startTime.split(":").map(Number);
-      const travelEndMinutes = startH * 60 + startM;
-      let travelStartMinutes = travelEndMinutes - totalMins;
-
-      // Clamp to prev class end if needed
-      if (prevEndTime) {
-        const [prevH, prevM] = prevEndTime.split(":").map(Number);
-        const prevEndMins = prevH * 60 + prevM;
-        if (travelStartMinutes < prevEndMins) travelStartMinutes = prevEndMins;
-      }
-
-      const travelStartStr = `${String(Math.floor(travelStartMinutes / 60)).padStart(2, "0")}:${String(travelStartMinutes % 60).padStart(2, "0")}`;
-      const travelEndStr = slot.startTime;
-
-      const quarterStart = resolveQuarterStart(cls);
-      const weeks = inferQuarterWeeks(cls.term);
-      const firstDate = getFirstDayInQuarter(quarterStart, dayOfWeek);
-
-      try {
-        await calendar.events.insert({
-          calendarId,
-          requestBody: {
-            summary: `Walk to ${toBuilding}`,
-            description: `${walkMins} min walk from ${locationLabel(fromName)}`,
-            colorId: "6", // tangerine/orange
-            start: { dateTime: `${firstDate}T${travelStartStr}:00`, timeZone },
-            end: { dateTime: `${firstDate}T${travelEndStr}:00`, timeZone },
-            recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${rruleDay};COUNT=${weeks}`],
-          },
-        });
-        eventsCreated++;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        errors.push(`Travel to ${toBuilding} on ${rruleDay}: ${msg}`);
+      // Update location only for events with travel enabled
+      if (wantTravel && building) {
+        currentBuilding = building;
       }
     }
   }

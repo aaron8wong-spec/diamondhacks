@@ -53,10 +53,9 @@ export function generateTravelEvents(
       (a, b) => a.startTime.getTime() - b.startTime.getTime(),
     );
 
-    // Track where you physically are (updated by ALL attended events)
+    // Track where you physically are
     let currentBuilding: string | null = null;
     let currentEndTime: Date | null = null;
-    let hadAnyEvent = false;
 
     for (let i = 0; i < sorted.length; i++) {
       const classEv = sorted[i];
@@ -75,17 +74,8 @@ export function generateTravelEvents(
         : null;
 
       if (wantTravel && building) {
-        // Determine origin
-        let fromName: string | null;
-
-        if (currentBuilding) {
-          fromName = currentBuilding;
-        } else if (!hadAnyEvent) {
-          // First event of the day — use home base
-          fromName = homeBase;
-        } else {
-          fromName = null;
-        }
+        // Determine origin: last known location, or homeBase as fallback
+        let fromName: string | null = currentBuilding ?? homeBase;
 
         // Check location overrides for long gaps
         if (fromName && currentEndTime) {
@@ -129,7 +119,6 @@ export function generateTravelEvents(
         currentBuilding = building;
         currentEndTime = classEv.endTime;
       }
-      hadAnyEvent = true;
     }
   }
 
