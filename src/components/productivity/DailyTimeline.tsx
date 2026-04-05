@@ -2,15 +2,42 @@
 
 import { useState, useEffect } from "react";
 import type { ClassEvent } from "./types";
+import { parseLocationToBuilding, getWalkingMinutes } from "@/lib/travel/walking-times";
+
+interface TravelInfo {
+  walkingMinutes: number;
+  toBuilding: string;
+}
 
 interface TimelineItem {
   kind: "class" | "gap" | "now";
   event?: ClassEvent;
   durationMins?: number;
   label?: string;
+  travel?: TravelInfo;
 }
 
-function buildTimeline(events: ClassEvent[], now: Date): TimelineItem[] {
+function computeGapTravel(
+  prevEvent: ClassEvent | undefined,
+  nextEvent: ClassEvent,
+  homeBase: string | null,
+): TravelInfo | undefined {
+  const toBuilding = nextEvent.location ? parseLocationToBuilding(nextEvent.location) : null;
+  if (!toBuilding) return undefined;
+
+  let fromName: string | null = null;
+  if (prevEvent?.location) {
+    fromName = parseLocationToBuilding(prevEvent.location);
+  }
+  if (!fromName) fromName = homeBase;
+  if (!fromName || fromName === toBuilding) return undefined;
+
+  const mins = getWalkingMinutes(fromName, toBuilding);
+  if (mins == null || mins === 0) return undefined;
+  return { walkingMinutes: mins, toBuilding };
+}
+
+function buildTimeline(events: ClassEvent[], now: Date, homeBase: string | null): TimelineItem[] {
   if (events.length === 0) return [];
 
   const items: TimelineItem[] = [];
@@ -35,10 +62,18 @@ function buildTimeline(events: ClassEvent[], now: Date): TimelineItem[] {
           items.push({ kind: "now" });
           nowInserted = true;
         }
+        const travel = computeGapTravel(prev, event, homeBase);
         items.push({
           kind: "gap",
           durationMins: gapMins,
+          travel,
         });
+      }
+    } else if (i === 0) {
+      // First class — check home→class travel
+      const travel = computeGapTravel(undefined, event, homeBase);
+      if (travel) {
+        items.push({ kind: "gap", durationMins: travel.walkingMinutes + 2, travel });
       }
     }
 
@@ -72,9 +107,10 @@ function formatTime(date: Date): string {
 interface DailyTimelineProps {
   events: ClassEvent[];
   nextDay?: { dayName: string; events: ClassEvent[] } | null;
+  homeBase?: string | null;
 }
 
-export function DailyTimeline({ events, nextDay }: DailyTimelineProps) {
+export function DailyTimeline({ events, nextDay, homeBase }: DailyTimelineProps) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -97,7 +133,17 @@ export function DailyTimeline({ events, nextDay }: DailyTimelineProps) {
                 className="flex items-center gap-3 rounded-xl bg-slate-50 border border-sky-100/60 px-3 py-2.5"
               >
                 <div className="min-w-0 flex-1">
-                  <span className="text-sm font-semibold text-sky-700">{event.code}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-sky-700">{event.code}</span>
+                    {event.type && (
+                      <span className="text-xs text-sky-400 capitalize">
+                        · {event.type === "office_hours" ? "OH" : event.type}
+                      </span>
+                    )}
+                    {event.type === "office_hours" && event.host && (
+                      <span className="text-xs text-teal-500">({event.host})</span>
+                    )}
+                  </div>
                   <p className="text-xs text-sky-400 truncate mt-0.5">{event.name}</p>
                 </div>
                 <div className="text-right shrink-0">
@@ -130,7 +176,7 @@ export function DailyTimeline({ events, nextDay }: DailyTimelineProps) {
     );
   }
 
-  const items = buildTimeline(events, now);
+  const items = buildTimeline(events, now, homeBase ?? null);
 
   return (
     <div className="bg-white rounded-2xl border border-sky-100/60 shadow-sm p-5">
@@ -157,24 +203,36 @@ export function DailyTimeline({ events, nextDay }: DailyTimelineProps) {
 
             if (item.kind === "gap") {
               const mins = Math.round(item.durationMins ?? 0);
+              const travel = item.travel;
+              const freeMins = travel ? Math.max(0, mins - travel.walkingMinutes - 2) : mins;
               return (
                 <div
                   key={`gap-${idx}`}
-                  className="relative flex items-center gap-3 py-2 pl-2"
+                  className="relative flex flex-col gap-1 py-2 pl-2"
                 >
                   <div className="absolute -left-[15px] w-2 h-px bg-slate-200" />
-                  <div className="flex-1 flex items-center justify-between bg-teal-50 rounded-xl px-3 py-2">
-                    <span className="text-sm text-sky-500 font-medium">
-                      {mins} min free
-                    </span>
-                    <span className="text-xs text-sky-300">
-                      {mins >= 30
-                        ? "focus session"
-                        : mins >= 15
-                        ? "quick review"
-                        : "short break"}
-                    </span>
-                  </div>
+                  {travel && (
+                    <div className="flex items-center gap-2 bg-orange-50 rounded-xl px-3 py-1.5">
+                      <span className="text-orange-400 text-sm">🚶</span>
+                      <span className="text-xs font-medium text-orange-600">
+                        {travel.walkingMinutes}m walk to {travel.toBuilding}
+                      </span>
+                    </div>
+                  )}
+                  {freeMins >= 5 && (
+                    <div className="flex-1 flex items-center justify-between bg-teal-50 rounded-xl px-3 py-2">
+                      <span className="text-sm text-sky-500 font-medium">
+                        {freeMins} min free
+                      </span>
+                      <span className="text-xs text-sky-300">
+                        {freeMins >= 30
+                          ? "focus session"
+                          : freeMins >= 15
+                          ? "quick review"
+                          : "short break"}
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             }

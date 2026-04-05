@@ -17,6 +17,7 @@ export interface ClassSchedule {
   endTime: string; // "15:20"
   location?: string;
   type: "lecture" | "discussion" | "lab" | "office_hours" | "final" | "midterm" | "other";
+  host?: string; // For office hours: who is hosting (e.g. "TA John", "Prof. Smith")
   recurrence?: string; // "weekly", or iCal RRULE
 }
 

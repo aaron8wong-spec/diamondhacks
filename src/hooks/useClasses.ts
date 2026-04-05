@@ -7,6 +7,7 @@ interface ClassSchedule {
   startTime: string;
   endTime: string;
   location?: string;
+  host?: string;
   type: string;
   recurrence?: string;
 }

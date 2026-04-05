@@ -28,6 +28,7 @@ const ScheduleSchema = new Schema<ClassSchedule>(
     startTime: { type: String, required: true },
     endTime: { type: String, required: true },
     location: { type: String },
+    host: { type: String },
     type: {
       type: String,
       enum: ["lecture", "discussion", "lab", "office_hours", "final", "midterm", "other"],

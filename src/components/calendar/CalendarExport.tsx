@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/Card";
 import { BrowserFrame } from "@/components/canvas/BrowserFrame";
 import { useBrowserSession } from "@/hooks/useBrowserSession";
 import { useClasses } from "@/hooks/useClasses";
+import { useTravelPreferences } from "@/hooks/useTravelPreferences";
+import { ALL_RESIDENCES, locationLabel } from "@/lib/travel/walking-times";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -32,6 +34,11 @@ export function CalendarExport() {
   const [calendars, setCalendars] = useState<CalendarOption[]>([]);
   const [selectedCalendarId, setSelectedCalendarId] = useState("primary");
   const [loadingCalendars, setLoadingCalendars] = useState(false);
+
+  // Travel export options
+  const { prefs: travelPrefs, setHomeBase: setTravelHomeBase } = useTravelPreferences();
+  const [includeTravelEvents, setIncludeTravelEvents] = useState(true);
+  const [exportHomeBase, setExportHomeBase] = useState<string | null>(travelPrefs.homeBase);
 
   // Fetch available calendars once connected
   const fetchCalendars = useCallback(async () => {
@@ -124,7 +131,11 @@ export function CalendarExport() {
       const res = await fetch("/api/calendar/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ calendarId: selectedCalendarId }),
+        body: JSON.stringify({
+          calendarId: selectedCalendarId,
+          includeTravelEvents: includeTravelEvents && !!exportHomeBase,
+          homeBase: exportHomeBase,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Export failed");
@@ -271,6 +282,43 @@ export function CalendarExport() {
               ) : (
                 calendarPicker
               )}
+
+              {/* Travel buffer options */}
+              <Card className="space-y-3 p-4">
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeTravelEvents}
+                    onChange={(e) => setIncludeTravelEvents(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Include walking time buffer events
+                </label>
+                {includeTravelEvents && (
+                  <div className="ml-6 space-y-1">
+                    <label className="block text-xs text-gray-500 dark:text-gray-400">
+                      Walk from (home base):
+                    </label>
+                    <select
+                      value={exportHomeBase ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value || null;
+                        setExportHomeBase(v);
+                        setTravelHomeBase(v); // also persist to travel prefs
+                      }}
+                      className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select your residence...</option>
+                      {ALL_RESIDENCES.map((r) => (
+                        <option key={r} value={r}>{locationLabel(r)}</option>
+                      ))}
+                    </select>
+                    {!exportHomeBase && (
+                      <p className="text-xs text-amber-600">Select a residence to enable travel events.</p>
+                    )}
+                  </div>
+                )}
+              </Card>
 
               <div className="flex gap-3">
                 <Button

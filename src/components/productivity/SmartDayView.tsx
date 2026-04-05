@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { useClasses } from "@/hooks/useClasses";
+import { useTravelPreferences } from "@/hooks/useTravelPreferences";
 import { getTodaysEvents, getNextClassDay } from "./types";
+import type { ClassEvent } from "./types";
+import { parseLocationToBuilding, getWalkingMinutes } from "@/lib/travel/walking-times";
 import { RightNowPanel } from "./RightNowPanel";
 import { LeaveReminder } from "./LeaveReminder";
 import { DailyTimeline } from "./DailyTimeline";
@@ -11,15 +14,48 @@ import { FocusTimer } from "./FocusTimer";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 
+function computeTravelMinutes(
+  events: ClassEvent[],
+  nextClass: ClassEvent | undefined,
+  homeBase: string | null,
+): number {
+  if (!nextClass?.location) return 10;
+  const toBuilding = parseLocationToBuilding(nextClass.location);
+  if (!toBuilding) return 10;
+
+  // Find the most recent class before this one (current or just ended)
+  const now = new Date();
+  const prevClass = [...events]
+    .filter((e) => e.id !== nextClass.id && e.endTime <= nextClass.startTime)
+    .sort((a, b) => b.endTime.getTime() - a.endTime.getTime())[0];
+
+  let fromName: string | null = null;
+  if (prevClass?.location) {
+    fromName = parseLocationToBuilding(prevClass.location);
+  }
+  if (!fromName) fromName = homeBase;
+  if (!fromName) return 10;
+  if (fromName === toBuilding) return 2; // same building, just buffer
+
+  const mins = getWalkingMinutes(fromName, toBuilding);
+  return mins != null ? mins + 2 : 10; // +2 peak buffer
+}
+
 export function SmartDayView() {
   const { classes, loading } = useClasses();
-  const [travelMins, setTravelMins] = useState(10);
+  const { prefs } = useTravelPreferences();
 
   const todayEvents = getTodaysEvents(classes);
   const hasClasses = classes.length > 0;
 
   const now = new Date();
   const nextClass = todayEvents.find((e) => e.startTime > now);
+
+  const travelMins = useMemo(
+    () => computeTravelMinutes(todayEvents, nextClass, prefs.homeBase),
+    [todayEvents, nextClass, prefs.homeBase],
+  );
+
   const showLeaveReminder =
     nextClass != null &&
     nextClass.startTime.getTime() - now.getTime() < 90 * 60_000;
@@ -70,7 +106,6 @@ export function SmartDayView() {
         <LeaveReminder
           nextClass={nextClass}
           travelMinutes={travelMins}
-          onChangeTravelTime={setTravelMins}
         />
       )}
 
@@ -81,6 +116,7 @@ export function SmartDayView() {
           <DailyTimeline
             events={todayEvents}
             nextDay={nextDay}
+            homeBase={prefs.homeBase}
           />
         </div>
 

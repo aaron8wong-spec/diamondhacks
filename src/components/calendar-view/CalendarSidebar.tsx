@@ -7,11 +7,14 @@ import { FocusTimer } from "@/components/productivity/FocusTimer";
 import { TinyTasks } from "@/components/productivity/TinyTasks";
 import { EVENT_STYLE } from "./types";
 import type { CalendarEvent, EventType, CalendarView } from "./types";
+import { ALL_RESIDENCES, locationLabel } from "@/lib/travel/walking-times";
 
 const ALL_TYPES: EventType[] = [
   "lecture",
   "discussion",
   "lab",
+  "office_hours",
+  "travel",
   "study",
   "task",
   "reminder",
@@ -27,9 +30,13 @@ interface CalendarSidebarProps {
   onNavigateToDate: (d: Date) => void;
   onViewChange: (v: CalendarView) => void;
   onToggleType: (t: EventType) => void;
+  homeBase: string | null;
+  travelEnabled: boolean;
+  onHomeBaseChange: (v: string | null) => void;
+  onTravelToggle: (v: boolean) => void;
 }
 
-type SidebarSection = "upcoming" | "focus" | "tasks" | "filters";
+type SidebarSection = "upcoming" | "focus" | "tasks" | "filters" | "travel";
 
 export function CalendarSidebar({
   currentDate,
@@ -39,6 +46,10 @@ export function CalendarSidebar({
   onSelectEvent,
   onNavigateToDate,
   onToggleType,
+  homeBase,
+  travelEnabled,
+  onHomeBaseChange,
+  onTravelToggle,
 }: CalendarSidebarProps) {
   const [openSection, setOpenSection] = useState<SidebarSection>("upcoming");
 
@@ -146,6 +157,50 @@ export function CalendarSidebar({
                   </button>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        {/* Travel settings */}
+        <div className="border-b border-sky-100/60">
+          <button
+            onClick={() => toggle("travel")}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:bg-sky-50/50 transition-colors"
+          >
+            Travel
+            <span className="text-sky-300 normal-case font-normal text-sm">
+              {openSection === "travel" ? "−" : "+"}
+            </span>
+          </button>
+          {openSection === "travel" && (
+            <div className="px-3 pb-3 space-y-3">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Home base</label>
+                <select
+                  value={homeBase ?? ""}
+                  onChange={(e) => onHomeBaseChange(e.target.value || null)}
+                  className="w-full text-xs rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                >
+                  <option value="">Not set</option>
+                  {ALL_RESIDENCES.map((r) => (
+                    <option key={r} value={r}>{locationLabel(r)}</option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={travelEnabled}
+                  onChange={(e) => onTravelToggle(e.target.checked)}
+                  className="rounded border-sky-300 text-sky-500 focus:ring-sky-400"
+                />
+                Show travel blocks
+              </label>
+              {homeBase && (
+                <p className="text-xs text-slate-400">
+                  Walking times from {locationLabel(homeBase)} to your first class each day.
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -59,8 +59,15 @@ export function RightNowPanel({ events, hasClasses, nextDay }: RightNowPanelProp
       <div className="rounded-2xl p-5 border border-sky-200/50"
            style={{ background: "linear-gradient(135deg, rgba(224,242,254,0.7) 0%, rgba(255,255,255,0.7) 100%)", backdropFilter: "blur(12px)" }}>
         <p className="text-xs font-semibold text-sky-400 uppercase tracking-widest mb-1">Happening now</p>
-        <p className="text-xl font-semibold text-sky-700">{currentClass.code}</p>
-        <p className="text-sm text-sky-500 mt-0.5">{currentClass.name}</p>
+        <p className="text-xl font-semibold text-sky-700">
+          {currentClass.code}
+          {currentClass.type === "office_hours" ? " OH" : ""}
+        </p>
+        <p className="text-sm text-sky-500 mt-0.5">
+          {currentClass.type === "office_hours" && currentClass.host
+            ? currentClass.host
+            : currentClass.name}
+        </p>
         <p className="text-sm text-sky-400 mt-2">
           Ends in {minsLeft} min{minsLeft !== 1 ? "s" : ""}
           {currentClass.location ? ` · ${currentClass.location}` : ""}

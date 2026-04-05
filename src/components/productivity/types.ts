@@ -8,6 +8,7 @@ export interface ClassEvent {
   endTime: Date;
   location?: string;
   type?: string;
+  host?: string;
 }
 
 /** Types that are one-time events, not weekly recurring */
@@ -47,6 +48,7 @@ export function getTodaysEvents(classes: ClassInfo[]): ClassEvent[] {
           endTime: parseTimeStr(slot.endTime, today),
           location: slot.location,
           type: slot.type,
+          host: slot.host,
         });
       }
     });

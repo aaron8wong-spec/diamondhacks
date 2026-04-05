@@ -1,6 +1,6 @@
 import { withAuth } from "@/lib/auth/middleware";
 import { repo } from "@/lib/db";
-import { exportClassesToCalendar } from "@/lib/google/calendar";
+import { exportClassesToCalendar, exportTravelEventsToCalendar } from "@/lib/google/calendar";
 import { exportToGoogleCalendar } from "@/lib/browser-use/calendar-pusher";
 
 /**
@@ -30,11 +30,22 @@ export const POST = withAuth(async (req, user) => {
           enabledClasses,
           body.calendarId || "primary",
         );
+        let travelResult = { eventsCreated: 0, errors: [] as string[] };
+        if (body.includeTravelEvents && body.homeBase) {
+          travelResult = await exportTravelEventsToCalendar(
+            user.googleRefreshToken,
+            enabledClasses,
+            body.homeBase,
+            body.calendarId || "primary",
+          );
+        }
+
         return Response.json({
           success: true,
           method: "api",
-          eventsCreated: result.eventsCreated,
-          errors: result.errors,
+          eventsCreated: result.eventsCreated + travelResult.eventsCreated,
+          travelEventsCreated: travelResult.eventsCreated,
+          errors: [...result.errors, ...travelResult.errors],
         });
       } catch (err) {
         console.error("Google Calendar API export failed:", err);

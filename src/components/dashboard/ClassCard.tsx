@@ -125,8 +125,13 @@ export function ClassCard({
                   <span className="text-gray-400">@ {s.location}</span>
                 )}
                 <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                  {s.type}
+                  {s.type === "office_hours" ? "OH" : s.type}
                 </span>
+                {s.host && (
+                  <span className="text-xs text-teal-600 dark:text-teal-400">
+                    {s.host}
+                  </span>
+                )}
               </div>
             ))}
           </div>

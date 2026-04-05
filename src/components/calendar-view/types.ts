@@ -6,7 +6,9 @@ export type EventType =
   | "task"
   | "reminder"
   | "personal"
-  | "google";
+  | "google"
+  | "travel"
+  | "office_hours";
 
 export type CalendarView = "month" | "week" | "day";
 
@@ -20,6 +22,7 @@ export interface CalendarEvent {
   location?: string;
   description?: string;
   classCode?: string;
+  host?: string;
 }
 
 // Full class string per type (no dynamic interpolation for Tailwind JIT)
@@ -74,6 +77,18 @@ export const EVENT_STYLE: Record<
     dot: "bg-emerald-300",
     pill: "bg-emerald-50 text-emerald-600",
     label: "Google Calendar",
+  },
+  travel: {
+    card: "bg-orange-50/70 border-l-2 border-l-orange-300 text-orange-700",
+    dot: "bg-orange-300",
+    pill: "bg-orange-50 text-orange-600",
+    label: "Travel",
+  },
+  office_hours: {
+    card: "bg-teal-50/80 border-l-2 border-l-teal-400 text-teal-700",
+    dot: "bg-teal-400",
+    pill: "bg-teal-50 text-teal-600",
+    label: "Office Hours",
   },
 };
 

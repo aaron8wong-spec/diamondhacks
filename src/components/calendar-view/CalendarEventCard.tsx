@@ -60,6 +60,11 @@ export function CalendarEventCard({
           {event.location}
         </p>
       )}
+      {event.host && (
+        <p className="text-xs opacity-60 truncate mt-0.5 leading-tight">
+          {event.host}
+        </p>
+      )}
     </button>
   );
 }

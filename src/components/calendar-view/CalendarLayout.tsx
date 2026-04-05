@@ -9,6 +9,8 @@ import { CalendarDayView } from "./CalendarDayView";
 import { TimeSelectionModal } from "./TimeSelectionModal";
 import { useClasses } from "@/hooks/useClasses";
 import { useGoogleCalendarEvents } from "@/hooks/useGoogleCalendarEvents";
+import { useTravelPreferences } from "@/hooks/useTravelPreferences";
+import { generateTravelEvents } from "@/lib/travel/generate-travel-events";
 import { getQuarterDates, inferQuarterWeeks, getFirstDayInQuarter } from "@/lib/quarter-dates";
 import type { CalendarView, EventType, CalendarEvent } from "./types";
 import type { NewCalendarEvent } from "./TimeSelectionModal";
@@ -50,7 +52,9 @@ function classesToCalendarEvents(
       const slotType = slot.type?.toLowerCase() ?? "";
       if (slotType === "final" || slotType === "midterm") continue;
 
-      const type: EventType = slotType.includes("lab")
+      const type: EventType = slotType === "office_hours" || slotType.includes("office")
+        ? "office_hours"
+        : slotType.includes("lab")
         ? "lab"
         : slotType.includes("disc")
         ? "discussion"
@@ -67,13 +71,14 @@ function classesToCalendarEvents(
 
           events.push({
             id: `cls-${cls.id}-${slot.dayOfWeek}-${slot.type}-w${week}`,
-            title: cls.code,
+            title: type === "office_hours" && slot.host ? `${cls.code} OH — ${slot.host}` : cls.code,
             classCode: cls.code,
             startTime: parseT(slot.startTime, date),
             endTime: parseT(slot.endTime, date),
             type,
             location: slot.location,
             description: cls.name,
+            host: slot.host,
           });
         }
       } else {
@@ -91,13 +96,14 @@ function classesToCalendarEvents(
 
           events.push({
             id: `cls-${cls.id}-${slot.dayOfWeek}-${slot.type}-w${weekOffset}`,
-            title: cls.code,
+            title: type === "office_hours" && slot.host ? `${cls.code} OH — ${slot.host}` : cls.code,
             classCode: cls.code,
             startTime: parseT(slot.startTime, date),
             endTime: parseT(slot.endTime, date),
             type,
             location: slot.location,
             description: cls.name,
+            host: slot.host,
           });
         }
       }
@@ -126,9 +132,12 @@ function googleEventsToCalendarEvents(
       for (const code of classCodes) {
         if (summary.toLowerCase().includes(code.toLowerCase())) {
           classCode = code;
-          type = summary.toLowerCase().includes("lab")
+          const lower = summary.toLowerCase();
+          type = lower.includes("office") || lower.includes(" oh")
+            ? "office_hours"
+            : lower.includes("lab")
             ? "lab"
-            : summary.toLowerCase().includes("disc")
+            : lower.includes("disc")
             ? "discussion"
             : "lecture";
           break;
@@ -163,6 +172,7 @@ export function CalendarLayout({ showGoogleEvents = true }: CalendarLayoutProps)
 
   const { classes } = useClasses();
   const { events: googleEvents, connected: googleConnected } = useGoogleCalendarEvents();
+  const { prefs: travelPrefs, setHomeBase, setTravelEnabled } = useTravelPreferences();
 
   const classCodes = useMemo(
     () => new Set(classes.map((c) => c.code)),
@@ -203,9 +213,14 @@ export function CalendarLayout({ showGoogleEvents = true }: CalendarLayoutProps)
     return [...deduped, ...gCalEvents];
   }, [classEvents, gCalEvents]);
 
+  const travelEvents = useMemo(() => {
+    if (!travelPrefs.travelEventsEnabled) return [];
+    return generateTravelEvents(baseEvents, travelPrefs.homeBase);
+  }, [baseEvents, travelPrefs.travelEventsEnabled, travelPrefs.homeBase]);
+
   const allEvents = useMemo(
-    () => [...baseEvents, ...userEvents],
-    [baseEvents, userEvents]
+    () => [...baseEvents, ...travelEvents, ...userEvents],
+    [baseEvents, travelEvents, userEvents]
   );
 
   const visibleEvents = useMemo(
@@ -283,6 +298,10 @@ export function CalendarLayout({ showGoogleEvents = true }: CalendarLayoutProps)
           onNavigateToDate={goToDate}
           onViewChange={setView}
           onToggleType={toggleType}
+          homeBase={travelPrefs.homeBase}
+          travelEnabled={travelPrefs.travelEventsEnabled}
+          onHomeBaseChange={setHomeBase}
+          onTravelToggle={setTravelEnabled}
         />
         <main className="flex-1 overflow-hidden bg-white/80 backdrop-blur-sm">
           {view === "month" && <CalendarMonthView {...sharedProps} />}
