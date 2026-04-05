@@ -4,7 +4,7 @@
 // ============================================================
 import { v4 as uuidv4 } from "uuid";
 import { repo } from "@/lib/db";
-import { browserUseApi } from "@/lib/browser-use/client";
+import { getClient } from "@/lib/browser-use/client";
 import type { IAssignment, IMilestone, IAssignmentProvider } from "./assignment-types";
 
 const assignmentsStore = new Map<string, IAssignment>();
@@ -159,13 +159,12 @@ Example format:
     if (!cls) throw new Error("Class not found");
 
     const profile = await repo.findProfileByUserAndService(userId, "canvas");
-    if (!profile?.canvasProfileId) {
+    if (!profile?.profileId) {
       throw new Error("No Canvas session found. Please connect Canvas first.");
     }
 
-    const session = await browserUseApi.sessions.create({
-      profileId: profile.canvasProfileId,
-    });
+    const client = getClient();
+    const session = await client.sessions.create({ profileId: profile.profileId });
 
     try {
       const task = `
@@ -181,10 +180,10 @@ Example format:
         Return ONLY a JSON array, no other text.
       `;
 
-      const result = await browserUseApi.run(task, {
-        sessionId: session.id,
-        model: "claude-sonnet-4-6",
-      });
+      const run = client.run(task, { sessionId: session.id, model: "bu-mini" });
+      // Drain the async iterable
+      for await (const _step of run) { /* progress steps */ }
+      const result = run.result;
 
       let scraped: Array<{
         id: string;
@@ -196,7 +195,7 @@ Example format:
       }> = [];
 
       try {
-        const text = result?.output ?? result?.result ?? "";
+        const text = result?.output ?? "";
         const match = text.match(/\[[\s\S]*\]/);
         if (match) scraped = JSON.parse(match[0]);
       } catch {
@@ -205,7 +204,6 @@ Example format:
 
       const created: IAssignment[] = [];
       for (const a of scraped) {
-        // Skip if already exists
         const exists = [...assignmentsStore.values()].find(
           (ex) =>
             ex.userId === userId &&
@@ -213,8 +211,7 @@ Example format:
             ex.canvasAssignmentId === a.id
         );
         if (exists) continue;
-
-        if (!a.dueDate) continue; // skip undated assignments
+        if (!a.dueDate) continue;
 
         const assignment = await assignmentProvider.createAssignment({
           userId,
@@ -233,7 +230,7 @@ Example format:
 
       return created;
     } finally {
-      await browserUseApi.sessions.stop(session.id);
+      await client.sessions.stop(session.id);
     }
   },
 
@@ -243,56 +240,42 @@ Example format:
 
     const cls = await repo.findClassById(assignment.classId);
     const profile = await repo.findProfileByUserAndService(userId, "google");
-    if (!profile?.googleProfileId) {
+    if (!profile?.profileId) {
       throw new Error("No Google Calendar session found. Please connect Google Calendar first.");
     }
 
-    const session = await browserUseApi.sessions.create({
-      profileId: profile.googleProfileId,
-    });
+    const client = getClient();
+    const session = await client.sessions.create({ profileId: profile.profileId });
 
     try {
-      // Build a list of events to create
       const events = [
-        // Due date event
         {
           title: `📋 DUE: ${assignment.title}`,
           date: assignment.dueDate,
           description: `${cls?.code ?? ""} assignment due today.\n${assignment.description ?? ""}`,
-          allDay: true,
         },
-        // Milestone events
         ...assignment.milestones.map((m) => ({
           title: `✅ ${m.title}`,
           date: m.dueDate,
           description: `Milestone for ${assignment.title} (${cls?.code ?? ""}): ${m.description}`,
-          allDay: true,
         })),
       ];
 
       const task = `
         Go to https://calendar.google.com/calendar/r/month.
-        Create the following Google Calendar events one by one.
-        For each event, create an all-day event on the specified date.
-        
-        Events to create:
+        Create the following Google Calendar all-day events one by one:
         ${events.map((e, i) => `${i + 1}. Title: "${e.title}" | Date: ${e.date} | Description: "${e.description}"`).join("\n")}
-        
-        Create each event as an all-day event. Add the description to each event.
-        After creating all events, confirm they were created successfully.
+        Create each as an all-day event with the description included.
       `;
 
-      await browserUseApi.run(task, {
-        sessionId: session.id,
-        model: "claude-sonnet-4-6",
-      });
+      const run = client.run(task, { sessionId: session.id, model: "bu-mini" });
+      for await (const _step of run) { /* progress */ }
 
-      // Mark as exported
       const updated = { ...assignment, calendarExported: true, updatedAt: now() };
       assignmentsStore.set(assignmentId, updated);
       return true;
     } finally {
-      await browserUseApi.sessions.stop(session.id);
+      await client.sessions.stop(session.id);
     }
   },
 };
